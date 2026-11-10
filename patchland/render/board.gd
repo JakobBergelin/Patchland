@@ -1,0 +1,396 @@
+class_name Board
+extends Control
+## The play area: camera, tiles (y-sorted), slots, ghost preview, indicators,
+## ray previews, region highlight, pennants and fx. Emits input as signals.
+##
+## Mouse: hover previews, left click places, RIGHT CLICK ROTATES the tile
+## (shift + right click rotates the other way), scroll wheel rotates too.
+
+signal hovered(cell)  # cand Dictionary or null
+signal clicked(cell)  # cand Dictionary or null
+signal rotate_requested(dir: int)
+signal speed_up_requested
+
+var game  # Game (reads S, sel, cur_eval, harvesting, hl_region)
+var fx := Fx.new()
+var cam := {"x": 0.0, "y": 0.0, "size": 40.0}
+var snap_cam := true
+var shake_amp := 0.0
+var punch := 0.0
+var mill_angle := 0.0
+var mill_fast_until := 0.0
+var reduced := false
+
+var nodes := {}  # Vector2i -> TileNode
+var ghost: TileNode
+var shaker: Node2D
+var slot_layer: Node2D
+var world: Node2D
+var tile_layer: Node2D
+var fx_layer: Node2D
+var _down = null  # Vector2 of left-press position
+
+
+func _ready() -> void:
+	clip_contents = true
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	shaker = Node2D.new()
+	add_child(shaker)
+	slot_layer = Node2D.new()
+	shaker.add_child(slot_layer)
+	slot_layer.draw.connect(_draw_slots)
+	world = Node2D.new()
+	shaker.add_child(world)
+	tile_layer = Node2D.new()
+	tile_layer.y_sort_enabled = true
+	world.add_child(tile_layer)
+	ghost = TileNode.new()
+	ghost.visible = false
+	ghost.modulate.a = 0.92
+	tile_layer.add_child(ghost)
+	fx_layer = Node2D.new()
+	shaker.add_child(fx_layer)
+	fx_layer.draw.connect(_draw_fx)
+	mouse_exited.connect(func(): hovered.emit(null))
+
+
+func _draw() -> void:
+	# soft radial-ish backdrop
+	draw_rect(Rect2(Vector2.ZERO, size), Pal.bg)
+	var c := size / 2
+	var r := maxf(size.x, size.y) * 0.62
+	for k in range(8, 0, -1):
+		var f := k / 8.0
+		var col := Pal.bg2.lerp(Pal.bg, f)
+		draw_set_transform(c, 0, Vector2(1.0, 0.75))
+		draw_circle(Vector2.ZERO, r * f, col)
+	draw_set_transform(Vector2.ZERO)
+
+
+# ---------- tiles ----------
+
+func clear_tiles() -> void:
+	for n in nodes.values():
+		n.queue_free()
+	nodes.clear()
+	fx.clear()
+	shake_amp = 0
+	punch = 0
+	snap_cam = true
+
+
+func add_tile(entry: Dictionary, born: float) -> void:
+	var n := TileNode.new(entry.tile)
+	n.born = born
+	n.position = Hex.wpos(entry.q, entry.r) * TileArt.S0
+	tile_layer.add_child(n)
+	n.refresh()
+	nodes[entry.k] = n
+
+
+func sync_tiles(board: Dictionary) -> void:
+	for k in board:
+		if not nodes.has(k):
+			add_tile(board[k], 0)
+
+
+func bump(k: Vector2i) -> void:
+	if nodes.has(k):
+		nodes[k].bump = Fx.now()
+
+
+func shake(px: float) -> void:
+	if not reduced:
+		shake_amp = minf(16, maxf(shake_amp, px))
+
+
+func punch_it(v: float) -> void:
+	if not reduced:
+		punch = maxf(punch, v)
+
+
+func mill_fast() -> void:
+	mill_fast_until = Fx.now() + 1500
+
+
+# ---------- camera ----------
+
+func fit_view(points: Array, w: float, h: float, pad: float, max_s: float) -> Dictionary:
+	var x0 := INF
+	var x1 := -INF
+	var y0 := INF
+	var y1 := -INF
+	for p in points:
+		var wp := Hex.wpos(p.q, p.r)
+		x0 = minf(x0, wp.x - Hex.SQ3 / 2 - 0.1)
+		x1 = maxf(x1, wp.x + Hex.SQ3 / 2 + 0.1)
+		y0 = minf(y0, wp.y - 1 - TileArt.PADT)
+		y1 = maxf(y1, wp.y + 1 + TileArt.DEPTH + 0.1)
+	var s := maxf(8, minf(minf((w - 2 * pad) / (x1 - x0), (h - 2 * pad) / (y1 - y0)), max_s))
+	return {"size": s, "x": (x0 + x1) / 2, "y": (y0 + y1) / 2}
+
+
+func _update_cam(dt: float) -> void:
+	if size.x < 2 or size.y < 2 or game == null or game.S == null:
+		return
+	var pts: Array = game.S.board.values() + game.S.cands.values()
+	var t := fit_view(pts, size.x, size.y, 14, 58)
+	if snap_cam or reduced:
+		cam = t
+		snap_cam = false
+		return
+	var k := minf(1, dt * 7)
+	cam.x += (t.x - cam.x) * k
+	cam.y += (t.y - cam.y) * k
+	cam.size += (t.size - cam.size) * k
+
+
+func ws(p: Vector2) -> Vector2:
+	return size / 2 + cam.size * (p - Vector2(cam.x, cam.y))
+
+
+func to_s(q: int, r: int) -> Vector2:
+	return ws(Hex.wpos(q, r))
+
+
+func view_rect() -> Rect2:
+	var w: Vector2 = size / cam.size
+	return Rect2(Vector2(cam.x, cam.y) - w / 2, w)
+
+
+func hit_test(local: Vector2):
+	if game == null or game.S == null:
+		return null
+	var w: Vector2 = (local - size / 2) / cam.size + Vector2(cam.x, cam.y)
+	return game.S.cands.get(Hex.from_world(w))
+
+
+# ---------- per frame ----------
+
+func _tile_anim(n: TileNode, now: float) -> Vector3:
+	var yo := 0.0
+	var sx := 1.0
+	var sy := 1.0
+	if reduced:
+		return Vector3(yo, sx, sy)
+	if n.born > 0:
+		var d := now - n.born
+		if d < 170:
+			var k := d / 170
+			yo = -(1 - k) * (1 - k) * 0.9
+		elif d < 420:
+			var k := (d - 170) / 250
+			var s := sin(k * PI) * (1 - k)
+			sy = 1 - 0.14 * s
+			sx = 1 + 0.09 * s
+	if n.bump > 0:
+		var k := (now - n.bump) / 280
+		if k >= 0 and k < 1:
+			yo -= 0.2 * sin(k * PI)
+	return Vector3(yo, sx, sy)  # yo in tile radii
+
+
+func _process(dt: float) -> void:
+	if game == null or game.S == null:
+		return
+	var now := Fx.now()
+	fx.reduced = reduced
+	fx.update(dt)
+	if shake_amp > 0:
+		shake_amp = maxf(0, shake_amp - dt * (shake_amp * 9 + 3))
+	if punch > 0:
+		punch = maxf(0, punch - dt * (punch * 10 + 0.02))
+	if not reduced:
+		mill_angle += dt * (9.0 if now < mill_fast_until else 1.1)
+	_update_cam(dt)
+
+	var off := Vector2.ZERO
+	if shake_amp > 0:
+		off = Vector2((randf() - 0.5) * 2 * shake_amp, (randf() - 0.5) * 2 * shake_amp)
+	var c := size / 2
+	var p := 1.0 + punch
+	shaker.position = off + c - c * p
+	shaker.scale = Vector2(p, p)
+	world.position = c - Vector2(cam.x, cam.y) * cam.size
+	var k: float = cam.size / TileArt.S0
+	world.scale = Vector2(k, k)
+
+	for n in nodes.values():
+		var a := _tile_anim(n, now)
+		n.apply_anim(a.x * TileArt.S0, a.y, a.z)
+		n.yo_px = a.x * cam.size
+		var wp: Vector2 = n.position / TileArt.S0
+		n.set_mill_angle(mill_angle + (wp.x + wp.y) * cam.size * 0.01)
+
+	var S: RunState = game.S
+	var show_ghost: bool = game.sel != null and S.cur != null and not S.busy
+	ghost.visible = show_ghost
+	if show_ghost:
+		ghost.set_tile(S.cur)
+		ghost.position = Hex.wpos(game.sel.q, game.sel.r) * TileArt.S0
+		var yo := -(0.14 + (0.0 if reduced else 0.035 * sin(now / 260.0)))
+		ghost.apply_anim(yo * TileArt.S0, 1, 1)
+		ghost.yo_px = yo * cam.size
+		ghost.set_mill_angle(mill_angle)
+		var blocked: bool = game.cur_eval != null and not game.cur_eval.get("blocked", []).is_empty()
+		ghost.modulate = Color(1, 0.62, 0.6, 0.8) if blocked else Color(1, 1, 1, 0.92)
+	slot_layer.queue_redraw()
+	fx_layer.queue_redraw()
+
+
+# ---------- drawing ----------
+
+func _draw_slots() -> void:
+	if game == null or game.S == null or game.harvesting:
+		return
+	var s: float = cam.size
+	var dash := maxf(2, s * 0.11)
+	for cnd in game.S.cands.values():
+		var cp := to_s(cnd.q, cnd.r)
+		var pts := TileArt.hex_pts(cp, s * 0.9)
+		if game.sel != null and game.sel.k == cnd.k:
+			slot_layer.draw_colored_polygon(pts, Color(1, 1, 1, 0.22))
+		for i in 6:
+			slot_layer.draw_dashed_line(pts[i], pts[(i + 1) % 6], Pal.slot, 1.25, dash, true, true)
+
+
+func _screen_of(k: Vector2i) -> Vector2:
+	var n: TileNode = nodes.get(k)
+	return to_s(k.x, k.y) + Vector2(0, n.yo_px if n else 0.0)
+
+
+func _draw_fx() -> void:
+	if game == null or game.S == null:
+		return
+	var ci := fx_layer
+	var s: float = cam.size
+	var now := Fx.now()
+	var S: RunState = game.S
+
+	# region highlight during the harvest
+	var hl = game.hl_region
+	if hl != null:
+		var glow := Defs.dark(hl.t)
+		glow.a = 0.45
+		for k in hl.keys:
+			var p := _screen_of(k)
+			TileArt.stroke_hex(ci, p, s * 0.94, glow, maxf(1.5, s * 0.07) + 5)
+			TileArt.stroke_hex(ci, p, s * 0.94, Color(1, 1, 1, 0.95), maxf(1.5, s * 0.07))
+
+	# quest pennants
+	for k in nodes:
+		var e = S.board.get(k)
+		if e == null or e.quest.is_empty():
+			continue
+		var p := _screen_of(k)
+		if not e.qdone:
+			TileArt.pennant(ci, Pal.bold, p, s, e.quest, e.prog)
+		elif e.has("done_at"):
+			var t: float = (now - e.done_at) / 700.0
+			if t < 1:
+				TileArt.pennant(ci, Pal.bold, p - Vector2(0, t * s * 0.6), s, e.quest, e.quest.need, 1 - t, 1 + t * 0.5)
+
+	# ghost extras
+	if ghost.visible:
+		var gp := to_s(game.sel.q, game.sel.r) + Vector2(0, ghost.yo_px)
+		if S.cur.has_quest():
+			TileArt.pennant(ci, Pal.bold, gp, s, S.cur.quest, 1, 0.9)
+		_draw_indicators(gp, s)
+		_draw_ray_preview(s)
+
+	fx.draw(ci, ws, s)
+
+
+func _draw_indicators(c: Vector2, s: float) -> void:
+	var ev = game.cur_eval
+	if ev == null:
+		return
+	var ci := fx_layer
+	for i in 6:
+		var m: int = ev.per[i]
+		if m < 0:
+			continue
+		var a := -i * PI / 3
+		var r := s * 0.84
+		var a1 := a - PI / 6 + 0.13
+		var a2 := a + PI / 6 - 0.13
+		var p1 := c + Vector2(cos(a1), sin(a1)) * r
+		var p2 := c + Vector2(cos(a2), sin(a2)) * r
+		if m == 1:
+			var w := maxf(2.5, s * 0.09)
+			ci.draw_line(p1 + Vector2(0, 1), p2 + Vector2(0, 1), Color(0, 0, 0, 0.3), w + 1, true)
+			ci.draw_line(p1, p2, Color.WHITE, w, true)
+		else:
+			var w := maxf(2, s * 0.07)
+			ci.draw_dashed_line(p1 + Vector2(0, 1), p2 + Vector2(0, 1), Color(0, 0, 0, 0.3), w + 1, s * 0.075, true, true)
+			ci.draw_dashed_line(p1, p2, Color("#e5534b"), w, s * 0.075, true, true)
+	# river / railroad links, and edges where the tile would cut one
+	var blocked: Array = ev.get("blocked", [])
+	for i in 6:
+		var fp: int = ev.feat_per[i]
+		var p := c + TileArt.edge_mid(i, s * 0.7)
+		var rad := maxf(3.5, s * 0.085)
+		if blocked.has(i):
+			var d := rad * 1.1
+			for pair in [[Vector2(-d, -d), Vector2(d, d)], [Vector2(-d, d), Vector2(d, -d)]]:
+				ci.draw_line(p + pair[0] + Vector2(0, 1), p + pair[1] + Vector2(0, 1), Color(0, 0, 0, 0.4), maxf(3, s * 0.08) + 1.5, true)
+				ci.draw_line(p + pair[0], p + pair[1], Color("#e5534b"), maxf(3, s * 0.08), true)
+		elif fp == 1:
+			ci.draw_circle(p + Vector2(0, 1), rad + 1.5, Color(0, 0, 0, 0.3))
+			ci.draw_circle(p, rad + 1.5, Color.WHITE)
+			ci.draw_circle(p, rad, Defs.top(ev.feat_kind[i]))
+		elif fp == 0:
+			ci.draw_arc(p, rad, 0, TAU, 16, Color(0.9, 0.33, 0.29, 0.85), maxf(1.5, s * 0.035), true)
+
+
+func _draw_ray_preview(s: float) -> void:
+	var ev = game.cur_eval
+	if ev == null or ev.events.is_empty():
+		return
+	var ci := fx_layer
+	var col := Color(1, 0.925, 0.627, 0.95)
+	for e in ev.events:
+		var own: bool = e.src.q == game.sel.q and e.src.r == game.sel.r
+		var sp := to_s(e.src.q, e.src.r) + Vector2(0, (ghost.yo_px if own else 0.0) - s * 0.2)
+		for ray in e.rays:
+			var last: Dictionary = ray.hits[ray.hits.size() - 1].e
+			var lp := to_s(last.q, last.r) - Vector2(0, s * 0.1)
+			ci.draw_dashed_line(sp + Vector2(0, 1), lp + Vector2(0, 1), Color(0, 0, 0, 0.35), maxf(2, s * 0.06) + 1, s * 0.11, true, true)
+			ci.draw_dashed_line(sp, lp, col, maxf(2, s * 0.06), s * 0.11, true, true)
+			for h in ray.hits:
+				ci.draw_circle(to_s(h.e.q, h.e.r) - Vector2(0, s * 0.1), maxf(3, s * 0.1), Color(1, 0.925, 0.627, 0.98))
+
+
+# ---------- input ----------
+
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		hovered.emit(hit_test(event.position))
+	elif event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		match mb.button_index:
+			MOUSE_BUTTON_LEFT:
+				if mb.pressed:
+					_down = mb.position
+				elif _down != null:
+					var moved: float = mb.position.distance_to(_down)
+					_down = null
+					if game and game.harvesting:
+						speed_up_requested.emit()
+					elif moved <= 10:
+						clicked.emit(hit_test(mb.position))
+			MOUSE_BUTTON_RIGHT:
+				if mb.pressed:
+					if game and game.harvesting:
+						speed_up_requested.emit()
+					else:
+						# keep the preview under the cursor, then rotate
+						hovered.emit(hit_test(mb.position))
+						rotate_requested.emit(-1 if mb.shift_pressed else 1)
+			MOUSE_BUTTON_WHEEL_DOWN:
+				if mb.pressed:
+					rotate_requested.emit(1)
+			MOUSE_BUTTON_WHEEL_UP:
+				if mb.pressed:
+					rotate_requested.emit(-1)
+		accept_event()
