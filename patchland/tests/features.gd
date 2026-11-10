@@ -207,6 +207,7 @@ func _run() -> void:
 func _shots(out_dir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	var game: Game = load("res://main.tscn").instantiate()
+	game.settings_path = "user://test_settings.cfg"  # keep the player's settings untouched
 	root.add_child(game)
 	for i in 5:
 		await process_frame

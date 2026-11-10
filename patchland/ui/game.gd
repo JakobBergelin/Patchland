@@ -3,7 +3,9 @@ extends Control
 ## Main controller: builds the UI, owns the RunState, runs placement and harvest
 ## sequences (timed callbacks), and handles input.
 
-const SETTINGS_PATH := "user://patchland.cfg"
+## Where settings and the best score are saved. Tests point this at their own file
+## (set before adding the node) so they never touch the player's settings.
+var settings_path := "user://patchland.cfg"
 const SHEET_W := 430.0
 
 var S: RunState
@@ -93,7 +95,7 @@ func _ready() -> void:
 
 func _load_settings() -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(SETTINGS_PATH) == OK:
+	if cfg.load(settings_path) == OK:
 		muted = cfg.get_value("game", "muted", false)
 		if cfg.get_value("game", "fullscreen", false) and DisplayServer.get_name() != "headless":
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
@@ -101,14 +103,14 @@ func _load_settings() -> void:
 
 func _save_setting(key: String, value) -> void:
 	var cfg := ConfigFile.new()
-	cfg.load(SETTINGS_PATH)
+	cfg.load(settings_path)
 	cfg.set_value("game", key, value)
-	cfg.save(SETTINGS_PATH)
+	cfg.save(settings_path)
 
 
 func get_best() -> int:
 	var cfg := ConfigFile.new()
-	if cfg.load(SETTINGS_PATH) == OK:
+	if cfg.load(settings_path) == OK:
 		return cfg.get_value("game", "best", 0)
 	return 0
 
@@ -444,7 +446,13 @@ func _build_ui() -> void:
 	calc.add_child(streak_panel)
 	hint_lbl = _lbl("", 15, Pal.soft)
 	hint_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint_lbl.custom_minimum_size = Vector2(120, 40)
+	# fixed three-line height: the hint changes with every hovered slot, and a
+	# changing height would resize the board above it and make the camera jump
+	hint_lbl.custom_minimum_size = Vector2(120, ceilf(3 * Pal.font.get_height(15) + 3 * hint_lbl.get_theme_constant("line_spacing")) + 2)
+	hint_lbl.max_lines_visible = 3
+	hint_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	hint_lbl.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	hint_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	readout.add_child(hint_lbl)
 
 	var actions := HBoxContainer.new()
@@ -1148,7 +1156,7 @@ func update_calc() -> void:
 	streak_panel.visible = S.streak >= 2
 	streak_lbl.text = "Streak %d" % S.streak
 	if S.busy:
-		hint_lbl.text = "Harvesting. Click the board to speed it up." if harvesting else "Scoring…"
+		_set_hint("Harvesting. Click the board to speed it up." if harvesting else "Scoring…")
 		return
 	if cur_eval == null:
 		_set_calc_idle(true)
@@ -1156,12 +1164,12 @@ func update_calc() -> void:
 			show_calc(calc_hold.chips, calc_hold.mult, calc_hold.total)
 		else:
 			show_calc(0, 0, 0)
-		hint_lbl.text = tile_hint(S.cur) + "Hover a dashed spot, or use the arrow keys, to preview your tile. Right-click to rotate. Scroll to zoom, drag or WASD to move the view, F to see the whole board."
+		_set_hint(tile_hint(S.cur) + "Hover a dashed spot, or use the arrow keys, to preview your tile. Right-click to rotate. Scroll to zoom, drag or WASD to move the view, F to see the whole board.")
 		return
 	if not cur_eval.blocked.is_empty():
 		_set_calc_idle(true)
 		show_calc(0, 0, 0)
-		hint_lbl.text = "Blocked: this would cut a river or railroad. Every river and track edge must meet the same on the other side. Rotate it or try another spot."
+		_set_hint("Blocked: this would cut a river or railroad. Every river and track edge must meet the same on the other side. Rotate it or try another spot.")
 		return
 	_set_calc_idle(false)
 	show_calc(cur_eval.chips, cur_eval.mult, cur_eval.total)
@@ -1196,7 +1204,13 @@ func update_calc() -> void:
 	if dh > 0:
 		h += " Harvest +%s." % Defs.fmt(dh)
 	h += " Click to place, right-click to rotate."
-	hint_lbl.text = h
+	_set_hint(h)
+
+
+## Sets the hint; the full text is also its tooltip in case the three lines cut it short.
+func _set_hint(text: String) -> void:
+	hint_lbl.text = text
+	hint_lbl.tooltip_text = text
 
 
 func update_buttons() -> void:

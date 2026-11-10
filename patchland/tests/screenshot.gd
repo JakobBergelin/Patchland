@@ -68,6 +68,7 @@ func _cand_screen() -> Vector2:
 func _run() -> void:
 	var scene: PackedScene = load("res://main.tscn")
 	game = scene.instantiate()
+	game.settings_path = "user://test_settings.cfg"  # keep the player's settings and best score untouched
 	root.add_child(game)
 	await _wait(30)
 	await _shot("01_intro")
