@@ -18,6 +18,8 @@ var streak := 0
 var best_streak := 0
 var quests := 0
 var lines_closed := 0
+var regions_closed := 0
+var biggest_closed := 0
 var perfects := 0
 var best_harvest := 0
 var survey_bonus := 0
@@ -84,6 +86,8 @@ func new_run(seed_val := -1) -> void:
 	best_streak = 0
 	quests = 0
 	lines_closed = 0
+	regions_closed = 0
+	biggest_closed = 0
 	perfects = 0
 	best_harvest = 0
 	survey_bonus = 0
@@ -163,18 +167,25 @@ func place(q: int, r: int) -> Dictionary:
 
 
 ## Applies the placement score, streak and quest completion.
-## Returns {perfect_streak, streak_lost, quests: [{e, bonus}], lines: [{net, bonus}]}
-## where lines are rivers/railroads this placement closed.
+## Returns {perfect_streak, streak_lost, quests: [{e, bonus}], lines: [{net, bonus}], regions: [{reg, bonus}]}
+## where lines are rivers/railroads and regions are biome areas this placement closed.
 func finish_placement(entry: Dictionary, ev: Dictionary) -> Dictionary:
 	round_score += ev.total
 	total += ev.total
-	var res := {"perfect_streak": 0, "streak_lost": false, "quests": [], "lines": []}
+	var res := {"perfect_streak": 0, "streak_lost": false, "quests": [], "lines": [], "regions": []}
 	for net in closed_lines(entry):
 		var bonus := Rules.close_bonus(self, net)
 		round_score += bonus
 		total += bonus
 		lines_closed += 1
 		res.lines.append({"net": net, "bonus": bonus})
+	for reg in closed_regions(entry):
+		var rbonus := Rules.region_bonus(self, reg.tiles.size())
+		round_score += rbonus
+		total += rbonus
+		regions_closed += 1
+		biggest_closed = maxi(biggest_closed, reg.tiles.size())
+		res.regions.append({"reg": reg, "bonus": rbonus})
 	if ev.perfect:
 		streak += 1
 		perfects += 1
@@ -227,6 +238,42 @@ func closed_lines(entry: Dictionary) -> Array:
 		if net.open == 0 and net.ends >= 2:
 			out.append(net)
 	return out
+
+
+## Biome regions (REGION_MIN+ tiles) that the tile at `entry` just closed: regions
+## of its own land, and neighbouring regions whose open edge it covered (with any
+## land). Every candidate touched the empty spot before, so all were open then and
+## each closure is reported once.
+func closed_regions(entry: Dictionary) -> Array:
+	var starts: Array = []
+	for t in entry.tile.kinds():
+		starts.append([entry, t])
+	for i in 6:
+		var n = board.get(entry.k + Hex.DIRS[i])
+		if n != null:
+			starts.append([n, n.tile.edge((i + 3) % 6)])
+	var out: Array = []
+	var seen := {}
+	for st in starts:
+		if seen.has([st[0].k, st[1]]):
+			continue
+		var reg := Rules.terrain_region(self, st[0], st[1])
+		for x in reg.tiles:
+			seen[[x.k, st[1]]] = true
+		if reg.open == 0 and reg.tiles.size() >= Defs.REGION_MIN:
+			out.append(reg)
+	return out
+
+
+## Total bonus the tile at `entry` (already on the board) earns by closing
+## rivers, railroads and biome regions. Used by the preview and the bots.
+func closing_bonus(entry: Dictionary) -> int:
+	var pts := 0
+	for net in closed_lines(entry):
+		pts += Rules.close_bonus(self, net)
+	for reg in closed_regions(entry):
+		pts += Rules.region_bonus(self, reg.tiles.size())
+	return pts
 
 
 func apply_harvest(points: int) -> void:

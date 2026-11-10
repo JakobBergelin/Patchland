@@ -39,6 +39,7 @@ const KEY_PAN_SPEED := 700.0  # screen px per second for WASD
 var user_zoom := 1.0
 var user_pan := Vector2.ZERO
 var _auto := {}  # sticky automatic view, see _fit()
+var _flashes: Array = []  # [{t, keys, t0, dur}] closed-area outlines
 
 
 func _ready() -> void:
@@ -84,6 +85,7 @@ func clear_tiles() -> void:
 		n.queue_free()
 	nodes.clear()
 	fx.clear()
+	_flashes.clear()
 	shake_amp = 0
 	punch = 0
 	snap_cam = true
@@ -350,6 +352,22 @@ func _draw_fx() -> void:
 	var now := Fx.now()
 	var S: RunState = game.S
 
+	# closed-area flashes: a fading outline around a just-closed biome region
+	for i in range(_flashes.size() - 1, -1, -1):
+		var fl: Dictionary = _flashes[i]
+		var ft: float = (now - fl.t0) / fl.dur
+		if ft >= 1:
+			_flashes.remove_at(i)
+			continue
+		var fa := 1.0 - ft * ft
+		var fc := Defs.top(fl.t)
+		fc.a = 0.55 * fa
+		for k in fl.keys:
+			var fp := _screen_of(k)
+			ci.draw_colored_polygon(TileArt.hex_pts(fp, s * 0.92), Color(1, 1, 1, 0.16 * fa))
+			TileArt.stroke_hex(ci, fp, s * 0.94, fc, maxf(2, s * 0.09) + 4)
+			TileArt.stroke_hex(ci, fp, s * 0.94, Color(1, 1, 1, 0.9 * fa), maxf(1.5, s * 0.05))
+
 	# region highlight during the harvest
 	var hl = game.hl_region
 	if hl != null:
@@ -511,3 +529,8 @@ func _key_pan(dt: float) -> void:
 		int(Input.is_physical_key_pressed(KEY_S)) - int(Input.is_physical_key_pressed(KEY_W)))
 	if d != Vector2.ZERO:
 		pan_by(-d.normalized() * KEY_PAN_SPEED * dt)
+
+
+## Briefly outlines a just-closed biome region (`keys` are its tiles).
+func flash_region(t: String, keys: Array, ms: float) -> void:
+	_flashes.append({"t": t, "keys": keys, "t0": Fx.now(), "dur": ms})

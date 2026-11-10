@@ -20,6 +20,13 @@ const FKEYS := ["river", "rail"]
 ## Bonus for closing a line (no open ends, both ends finished), as a share of the
 ## round goal per tile in the line (counted up to 10 tiles).
 const CLOSE_BONUS := {"river": 0.012, "rail": 0.015}
+## Bonus for closing a biome region (no edge of its land faces an empty spot):
+## goal * REGION_BONUS * n * (1 + n / REGION_GROWTH), so bigger areas pay more
+## than proportionally. Regions under REGION_MIN tiles don't count; n is capped.
+const REGION_BONUS := 0.004
+const REGION_GROWTH := 4.0
+const REGION_MIN := 3
+const REGION_CAP := 16
 const FEATURE_CHANCE := 0.3  # of non-special tiles
 const RIVER_SHARE := 0.55
 const TWEIGHT := [["forest", 28], ["field", 24], ["meadow", 20], ["water", 14], ["village", 14]]
@@ -64,7 +71,7 @@ const BOSSES := [
 
 const BOSS_ROUNDS := [2, 5, 7]
 const ROUNDS := 8
-const GOALS := [600, 4000, 10000, 34000, 78000, 140000, 360000, 480000]
+const GOALS := [600, 4000, 10000, 34000, 78000, 130000, 340000, 480000]
 
 
 static func relic(id: String) -> Dictionary:

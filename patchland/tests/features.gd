@@ -128,6 +128,46 @@ func _run() -> void:
 	var half := s.closed_lines(s.board[Vector2i(0, 1)])
 	check(half.is_empty(), "an open line pays nothing yet")
 
+	# --- closing a biome area pays a bonus that grows with its size ---
+	var m := ["meadow", "meadow", "meadow", "meadow", "meadow", "meadow"]
+	var withf := func(edges: Array) -> Tile:
+		var b: Array = m.duplicate()
+		for i in edges:
+			b[i] = "forest"
+		return mk(b)
+	var r := RunState.new()
+	r.new_run(3)
+	r.board.clear()
+	r.board[Vector2i(0, 0)] = RunState.make_entry(0, 0, withf.call([0, 5]))  # A: forest toward B and C
+	r.board[Vector2i(1, 0)] = RunState.make_entry(1, 0, withf.call([3, 4]))  # B: forest toward A and C
+	check(Rules.terrain_region(r, r.board[Vector2i(0, 0)], "forest").open > 0, "a forest with an edge facing an empty spot is open")
+	r.board[Vector2i(0, 1)] = RunState.make_entry(0, 1, withf.call([2, 1]))  # C closes the triangle
+	var cr := r.closed_regions(r.board[Vector2i(0, 1)])
+	var forest_closed := cr.filter(func(x): return x.t == "forest")
+	check(forest_closed.size() == 1 and forest_closed[0].tiles.size() == 3, "matching the last open forest edges closes the 3-tile forest")
+	check(cr.filter(func(x): return x.t == "meadow").is_empty(), "the meadow around it is still open, so it doesn't count")
+	var rs0 := r.round_score
+	var cev := Rules.evaluate(r, 0, 1, r.board[Vector2i(0, 1)].tile)
+	var cres := r.finish_placement(r.board[Vector2i(0, 1)], cev)
+	check(cres.regions.size() == 1 and r.round_score == rs0 + cev.total + Rules.region_bonus(r, 3), "finish_placement pays the area bonus")
+	# closing by covering the last open edge with different land
+	r.board.clear()
+	r.board[Vector2i(0, 0)] = RunState.make_entry(0, 0, withf.call([0, 1, 3]))
+	r.board[Vector2i(1, 0)] = RunState.make_entry(1, 0, withf.call([3, 2]))
+	r.board[Vector2i(-1, 0)] = RunState.make_entry(-1, 0, withf.call([0]))
+	check(Rules.terrain_region(r, r.board[Vector2i(0, 0)], "forest").open == 2, "forest of 3 open only toward one spot")
+	r.board[Vector2i(1, -1)] = RunState.make_entry(1, -1, mk(m))
+	var cov := r.closed_regions(r.board[Vector2i(1, -1)])
+	check(cov.size() == 1 and cov[0].t == "forest" and cov[0].tiles.size() == 3, "covering the open spot with other land closes the forest too")
+	check(r.closing_bonus(r.board[Vector2i(1, -1)]) == Rules.region_bonus(r, 3), "closing_bonus sums it for the preview and bots")
+	# size scaling
+	check(Rules.region_bonus(r, 2) == 0, "areas under %d tiles don't count" % Defs.REGION_MIN)
+	r.round_idx = 4  # use a mid-run goal so rounding to tens doesn't blur the curve
+	var b3 := Rules.region_bonus(r, 3)
+	var b6 := Rules.region_bonus(r, 6)
+	var b12 := Rules.region_bonus(r, 12)
+	check(b6 > 2 * b3 and b12 > 2 * b6, "bigger areas pay more than proportionally (3: %d, 6: %d, 12: %d at goal %d)" % [b3, b6, b12, r.goal()])
+
 	# --- never stuck ---
 	var hog := mk(["meadow", "meadow", "meadow", "meadow", "meadow", "meadow"], {0: "rail", 1: "rail", 2: "rail", 3: "rail", 4: "rail", 5: "rail"})
 	s.cur = hog

@@ -788,6 +788,28 @@ func finish_placement(entry: Dictionary, ev: Dictionary) -> void:
 		board.fx.float_at(w.x, w.y - 2.3, "%s: +%s" % [verb, Defs.fmt(ln.bonus)], "gold", 1.15, true, 1600)
 		board.shake(2)
 		sfx.quest()
+	var lift: float = 2.3 + 0.6 * res.lines.size()
+	for rg in res.regions:
+		# a biome area was closed: outline it, ripple across its tiles and pay the size bonus
+		var reg: Dictionary = rg.reg
+		var keys: Array = []
+		var centre := Vector2.ZERO
+		for x in reg.tiles:
+			keys.append(x.k)
+			var xp := Hex.wpos(x.q, x.r)
+			centre += xp
+			board.fx.ring(xp.x, xp.y, 700, Defs.top(reg.t), 0.45)
+			board.bump(x.k)
+		centre /= reg.tiles.size()
+		board.flash_region(reg.t, keys, 900)
+		board.fx.burst(centre.x, centre.y - 0.4, mini(40, 8 + 2 * reg.tiles.size()), [Defs.top(reg.t), Color.WHITE, Color("#f5c542")], {"speed": 3.0, "up": 2.2, "grav": 6.0, "life": 0.9})
+		board.fx.float_at(centre.x, centre.y - lift, "%s closed ×%d: +%s" % [Defs.name_of(reg.t), reg.tiles.size(), Defs.fmt(rg.bonus)], "gold", minf(1.6, 1.0 + 0.04 * reg.tiles.size()), true, 1700)
+		lift += 0.6
+		board.shake(minf(4, 1 + 0.25 * reg.tiles.size()))
+		if reg.tiles.size() >= 8:
+			sfx.clear()
+		else:
+			sfx.quest()
 	if S.tiles_left <= 0:
 		after(450, start_harvest)
 	else:
@@ -967,10 +989,17 @@ func refresh_eval() -> void:
 				n += 1
 		cur_eval.quests = n
 		cur_eval.harvest = Rules.harvest_calc(S).total
+		# what this placement would close (rivers, railroads, biome regions) and its bonus
 		var close_pts := 0
+		var closes: Array[String] = []
 		for net in S.closed_lines(S.board[k]):
 			close_pts += Rules.close_bonus(S, net)
+			closes.append(Defs.name_of(net.f).to_lower())
+		for reg in S.closed_regions(S.board[k]):
+			close_pts += Rules.region_bonus(S, reg.tiles.size())
+			closes.append("%s (%d tiles)" % [Defs.name_of(reg.t).to_lower(), reg.tiles.size()])
 		cur_eval.close_bonus = close_pts
+		cur_eval.closes = closes
 		S.board.erase(k)
 	update_calc()
 	update_buttons()
@@ -1197,7 +1226,7 @@ func update_calc() -> void:
 	elif not cur_eval.matches and not hits and not cur_eval.feat_matches:
 		h += " Rotate to find a match."
 	if cur_eval.get("close_bonus", 0):
-		h += " Closes a line: +%s bonus." % Defs.fmt(cur_eval.close_bonus)
+		h += " Closes %s: +%s bonus." % [", ".join(cur_eval.closes), Defs.fmt(cur_eval.close_bonus)]
 	if cur_eval.quests:
 		h += (" Finishes %d quests." % cur_eval.quests) if cur_eval.quests > 1 else " Finishes a quest."
 	var dh: int = cur_eval.harvest - S.harvest_base
@@ -1536,7 +1565,7 @@ func _stats() -> GridContainer:
 	g.columns = 2
 	g.add_theme_constant_override("h_separation", 8)
 	g.add_theme_constant_override("v_separation", 8)
-	for it in [[Defs.fmt(S.best_harvest), "Best harvest"], [str(S.perfects), "Perfects"], [str(S.best_streak), "Best streak"], [str(S.quests), "Quests"], [str(S.lines_closed), "Lines closed"], [str(S.relics.size()), "Relics"]]:
+	for it in [[Defs.fmt(S.best_harvest), "Best harvest"], [str(S.perfects), "Perfects"], [str(S.best_streak), "Best streak"], [str(S.quests), "Quests"], [str(S.lines_closed), "Lines closed"], [str(S.regions_closed), "Areas closed"], [str(S.biggest_closed), "Biggest closed area"], [str(S.relics.size()), "Relics"]]:
 		var p := PanelContainer.new()
 		p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		p.add_theme_stylebox_override("panel", _sb(Pal.bg2, 12, Color(0, 0, 0, 0), 0, Vector4(10, 8, 10, 8)))
