@@ -27,6 +27,9 @@ var picks := 0
 var boss := ""
 var harvest_base := 0
 var boss_order: Array = []
+## True when the current tile has no spot that keeps every river and railroad
+## intact, so the "don't cut a line" rule is lifted for that tile only.
+var line_rule_lifted := false
 
 
 func has_relic(id: String) -> bool:
@@ -38,7 +41,27 @@ func goal() -> int:
 
 
 func make_tile(min_kinds := 0, plain := false) -> Tile:
-	return Tile.make(rng, min_kinds, plain, relics, round_idx)
+	return Tile.make(rng, min_kinds, plain, relics, round_idx, {"river": has_open("river") or has_open_water(), "rail": has_open("rail")})
+
+
+## True if some edge of feature `f` on the board faces an empty spot (a line is open).
+## Track is only dealt while a railroad is open; otherwise railroads come as
+## stations that start a new line.
+func has_open(f: String) -> bool:
+	for e in board.values():
+		for i in 6:
+			if e.tile.feat_at(i) == f and not board.has(e.k + Hex.DIRS[i]):
+				return true
+	return false
+
+
+## True if a water edge on the board faces an empty spot, so a river could flow out of it.
+func has_open_water() -> bool:
+	for e in board.values():
+		for i in 6:
+			if e.tile.edge(i) == "water" and e.tile.feat_at(i) == "" and not board.has(e.k + Hex.DIRS[i]):
+				return true
+	return false
 
 
 static func make_entry(q: int, r: int, tile: Tile) -> Dictionary:
@@ -93,7 +116,14 @@ func start_round() -> void:
 	cur = make_tile()
 	nxt = make_tile()
 	busy = false
+	refresh_line_rule()
 	harvest_base = Rules.harvest_calc(self).total
+
+
+func refresh_line_rule() -> void:
+	line_rule_lifted = false
+	if cur != null:
+		line_rule_lifted = not Rules.has_legal_spot(self, cur)
 
 
 func rotate_cur(dir: int) -> void:
@@ -106,11 +136,15 @@ func redraw() -> bool:
 	redraws -= 1
 	cur = nxt
 	nxt = make_tile()
+	refresh_line_rule()
 	return true
 
 
 ## Puts the current tile on the board. Scoring is applied by finish_placement().
+## Returns {} (and changes nothing) if the placement would cut a railroad.
 func place(q: int, r: int) -> Dictionary:
+	if not Rules.can_place(self, q, r, cur):
+		return {}
 	var tile := cur
 	var ev := Rules.evaluate(self, q, r, tile)
 	var entry := make_entry(q, r, tile)
@@ -122,15 +156,22 @@ func place(q: int, r: int) -> Dictionary:
 	cur = nxt
 	nxt = make_tile()
 	recompute_cands()
+	refresh_line_rule()
 	return {"entry": entry, "ev": ev, "events": events}
 
 
 ## Applies the placement score, streak and quest completion.
-## Returns {perfect_streak, streak_lost, quests: [{e, bonus}]}.
+## Returns {perfect_streak, streak_lost, quests: [{e, bonus}], line: {tiles, ends, f} or {}}.
 func finish_placement(entry: Dictionary, ev: Dictionary) -> Dictionary:
 	round_score += ev.total
 	total += ev.total
-	var res := {"perfect_streak": 0, "streak_lost": false, "quests": []}
+	var res := {"perfect_streak": 0, "streak_lost": false, "quests": [], "line": {}}
+	# a river or railroad that now runs end to end (lake to lake, station to station)
+	var f: String = entry.tile.feature()
+	if f != "" and ev.feat_matches > 0:
+		var net := Rules.line_network(self, entry, f)
+		if net.ends >= 2:
+			res.line = net
 	if ev.perfect:
 		streak += 1
 		perfects += 1

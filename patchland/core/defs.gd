@@ -9,6 +9,16 @@ const TER := {
 	"village": {"name": "Village", "chips": 8, "top": "#d2c4ab", "dark": "#a8977c"},
 }
 const TKEYS := ["forest", "field", "meadow", "water", "village"]
+
+## Edge features drawn over the land. Linking the same feature across an edge
+## scores its chips and +1 mult; linked networks score again in the harvest.
+const FEAT := {
+	"river": {"name": "River", "chips": 6, "top": "#4a90c4", "dark": "#2f6d9e"},
+	"rail": {"name": "Railroad", "chips": 8, "top": "#9a7b5c", "dark": "#5b4636"},
+}
+const FKEYS := ["river", "rail"]
+const FEATURE_CHANCE := 0.3  # of non-special tiles
+const RIVER_SHARE := 0.55
 const TWEIGHT := [["forest", 28], ["field", 24], ["meadow", 20], ["water", 14], ["village", 14]]
 
 const SPECIALS := {
@@ -69,11 +79,15 @@ static func boss(id: String) -> Dictionary:
 
 
 static func top(t: String) -> Color:
-	return Color.html(TER[t].top)
+	return Color.html(FEAT[t].top if FEAT.has(t) else TER[t].top)
 
 
 static func dark(t: String) -> Color:
-	return Color.html(TER[t].dark)
+	return Color.html(FEAT[t].dark if FEAT.has(t) else TER[t].dark)
+
+
+static func name_of(t: String) -> String:
+	return FEAT[t].name if FEAT.has(t) else TER[t].name
 
 
 static func fmt(n: float) -> String:

@@ -222,6 +222,133 @@ static func _clipped_polyline(ci: CanvasItem, line: PackedVector2Array, clip: Pa
 			ci.draw_polyline(piece, col, w, true)
 
 
+## Midpoint of screen edge i (E = 0, counter-clockwise), at radius = apothem.
+static func edge_mid(i: int, s: float) -> Vector2:
+	var a := -i * PI / 3
+	return Vector2(cos(a), sin(a)) * s * 0.866
+
+
+## Centre-lines of the tile's river/railroad: one curve through the centre for
+## two edges, otherwise spokes from each edge to the centre.
+static func feature_lines(tile: Tile, s: float) -> Array:
+	var edges: Array[int] = []
+	for i in 6:
+		if tile.feat_at(i) != "":
+			edges.append(i)
+	var out: Array = []
+	if edges.size() == 2:
+		out.append(_quad(edge_mid(edges[0], s), Vector2.ZERO, edge_mid(edges[1], s), 14))
+	else:
+		for i in edges:
+			out.append(_quad(edge_mid(i, s), edge_mid(i, s) * 0.5, Vector2.ZERO, 6))
+	return out
+
+
+static func _near_lines(p: Vector2, lines: Array, dist: float) -> bool:
+	for line in lines:
+		for k in line.size() - 1:
+			if p.distance_to(Geometry2D.get_closest_point_to_segment(p, line[k], line[k + 1])) < dist:
+				return true
+	return false
+
+
+static func _offset_line(line: PackedVector2Array, off: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for k in line.size():
+		var a: Vector2 = line[maxi(0, k - 1)]
+		var b: Vector2 = line[mini(line.size() - 1, k + 1)]
+		var d := (b - a).normalized()
+		out.append(line[k] + Vector2(-d.y, d.x) * off)
+	return out
+
+
+static func draw_feature(ci: CanvasItem, tile: Tile, lines: Array, s: float) -> void:
+	var f := tile.feature()
+	if f == "" or lines.is_empty():
+		return
+	var edges := tile.feat.count(f)
+	var hub := edges != 2  # an end or a junction meets in the middle
+	if f == "river":
+		var bank := Color("#3b6f8f")
+		var water := Defs.top("river")
+		var lake := edges == 1
+		var lr := s * (0.3 if lake else 0.19)  # a lake is a wide pool in the middle
+		for line in lines:
+			ci.draw_polyline(line, bank, s * 0.25, true)
+		if hub:
+			ellipse(ci, Vector2.ZERO, lr, lr * (0.78 if lake else 1.0), bank)
+		for line in lines:
+			ci.draw_polyline(line, water, s * 0.18, true)
+		if hub:
+			var inner := lr - s * 0.035
+			ellipse(ci, Vector2.ZERO, inner, inner * (0.78 if lake else 1.0), water)
+		for line in lines:
+			ci.draw_polyline(_offset_line(line, s * 0.035), Color(1, 1, 1, 0.35), 1.0, true)
+		if lake:
+			# ripples and reeds
+			for k in 2:
+				var y := -s * 0.06 + k * s * 0.1
+				ci.draw_line(Vector2(-s * 0.1 + k * s * 0.05, y), Vector2(s * 0.04 + k * s * 0.05, y), Color(1, 1, 1, 0.45), 1.0, true)
+			for k in 3:
+				var x := lr * 0.75 - k * 2.2
+				ci.draw_line(Vector2(x, lr * 0.55), Vector2(x - 0.8, lr * 0.55 - s * 0.09), Color("#4f7a3a"), 1.1, true)
+	else:
+		var ballast := Color("#b9a58a")
+		for line in lines:
+			ci.draw_polyline(line, ballast, s * 0.2, true)
+		if hub:
+			ci.draw_circle(Vector2.ZERO, s * 0.1, ballast)
+		var sleeper := Color("#6b4f3a")
+		for line in lines:
+			var travelled := 0.0
+			var next := 2.0
+			for k in line.size() - 1:
+				var a: Vector2 = line[k]
+				var b: Vector2 = line[k + 1]
+				var seg := a.distance_to(b)
+				var d := (b - a) / maxf(seg, 0.001)
+				var nrm := Vector2(-d.y, d.x)
+				while next <= travelled + seg:
+					var p := a + d * (next - travelled)
+					ci.draw_line(p - nrm * s * 0.1, p + nrm * s * 0.1, sleeper, 1.6, true)
+					next += 4.2
+				travelled += seg
+		var steel := Color("#4a4a52")
+		for line in lines:
+			ci.draw_polyline(_offset_line(line, s * 0.055), steel, 1.1, true)
+			ci.draw_polyline(_offset_line(line, -s * 0.055), steel, 1.1, true)
+
+
+
+## A small station building where a railroad ends (drawn with the deco so it depth-sorts).
+static func station(ci: CanvasItem, x: float, y: float, s: float) -> void:
+	var w := s * 0.34
+	var h := s * 0.17
+	var dx := s * 0.1
+	var dy := -s * 0.07
+	var L := x - w / 2
+	var R := x + w / 2
+	var B := y + s * 0.08
+	var T := B - h
+	ellipse(ci, Vector2(x + dx * 0.5, B + 1), w * 0.7, s * 0.1, Color(0, 0, 0, 0.22))
+	# platform
+	poly(ci, [Vector2(L - s * 0.05, B), Vector2(R + s * 0.05, B), Vector2(R + s * 0.05 + dx, B + dy), Vector2(L - s * 0.05 + dx, B + dy)], Color("#cfc3ae"))
+	# side wall, front wall
+	poly(ci, [Vector2(R, B), Vector2(R + dx, B + dy), Vector2(R + dx, T + dy), Vector2(R, T)], Color("#a8822f"))
+	rect(ci, L, T, w, h, Color("#e2b649"))
+	# roof
+	var roof := Color("#5a4a3e")
+	poly(ci, [Vector2(L - s * 0.04, T), Vector2(R + s * 0.04, T), Vector2(R + s * 0.04 + dx, T + dy), Vector2(L - s * 0.04 + dx, T + dy)], roof)
+	poly(ci, [Vector2(L - s * 0.04, T), Vector2(R + s * 0.04, T), Vector2(R + s * 0.04, T + s * 0.035), Vector2(L - s * 0.04, T + s * 0.035)], roof.darkened(0.2))
+	# windows, door, clock
+	var win := Color("#f6d77a")
+	rect(ci, L + w * 0.1, T + h * 0.35, w * 0.16, h * 0.3, win)
+	rect(ci, R - w * 0.26, T + h * 0.35, w * 0.16, h * 0.3, win)
+	rect(ci, x - w * 0.09, T + h * 0.3, w * 0.18, h * 0.7, Color("#3a2420"))
+	ci.draw_circle(Vector2(x, T - s * 0.05), s * 0.035, Color("#f4efe6"))
+	ci.draw_arc(Vector2(x, T - s * 0.05), s * 0.035, 0, TAU, 12, roof, 0.8, true)
+
+
 ## Draws a whole tile centred on (0, 0).
 static func draw_tile(ci: CanvasItem, tile: Tile) -> void:
 	var s := S0
@@ -242,6 +369,12 @@ static func draw_tile(ci: CanvasItem, tile: Tile) -> void:
 		poly(ci, face, face_col)
 		poly(ci, [p1, p2, p2 + Vector2(0, d * 0.32), p1 + Vector2(0, d * 0.32)], Color("#d9a926") if tile.gold else Defs.dark(t))
 		poly(ci, face, Color(0, 0, 0, 0.2) if i == 5 else Color(0, 0, 0, 0.05))
+		if tile.feat_at(i) == "river":
+			# the river spills over the side of the tile
+			var m := (p1 + p2) / 2
+			var u := (p2 - p1).normalized() * s * 0.09
+			poly(ci, [m - u, m + u, m + u + Vector2(0, d), m - u + Vector2(0, d)], Defs.top("river").darkened(0.12))
+			ci.draw_line(m + Vector2(0, d * 0.3), m + Vector2(0, d * 0.9), Color(1, 1, 1, 0.4), 1.0, true)
 
 	# top wedges
 	for i in 6:
@@ -254,6 +387,8 @@ static func draw_tile(ci: CanvasItem, tile: Tile) -> void:
 
 	# per-wedge detail, collecting depth-sorted decorations
 	var deco: Array = []
+	var flines := feature_lines(tile, s)
+	var fclear := s * (0.2 if tile.feature() == "river" else 0.17)
 	var R := RandomNumberGenerator.new()
 	for i in 6:
 		var t := tile.edge(i)
@@ -263,7 +398,7 @@ static func draw_tile(ci: CanvasItem, tile: Tile) -> void:
 		var p1: Vector2 = pp[0]
 		var p2: Vector2 = pp[1]
 		var tri := PackedVector2Array([C, p1, p2])
-		var lo0 := 0.42 if tile.special != "" else 0.2
+		var lo0 := 0.42 if tile.special != "" or tile.is_station() else 0.2
 		var pt := func(lo: float, hi: float) -> Vector2:
 			lo = maxf(lo, lo0)
 			for k in 24:
@@ -271,7 +406,10 @@ static func draw_tile(ci: CanvasItem, tile: Tile) -> void:
 				var v := R.randf()
 				if u + v > hi or u + v < lo:
 					continue
-				return p1 * u + p2 * v
+				var cand := p1 * u + p2 * v
+				if not flines.is_empty() and _near_lines(cand, flines, fclear):
+					continue  # keep trees and houses off the river / track
+				return cand
 			return (p1 + p2) / 3.0
 		if t == "field":
 			var ux := (p2 - p1).normalized()
@@ -328,6 +466,7 @@ static func draw_tile(ci: CanvasItem, tile: Tile) -> void:
 				var flip := R.randf() < 0.5
 				deco.append({"y": p.y, "k": "house", "p": p, "sz": sz, "flip": flip})
 
+	draw_feature(ci, tile, flines, s)
 	stroke_hex(ci, C, s, Color(0, 0, 0, 0.14), 1.0)
 	for i in [1, 2, 3]:
 		var pp: Array = wc.call(i)
@@ -350,6 +489,8 @@ static func draw_tile(ci: CanvasItem, tile: Tile) -> void:
 			ci.draw_polyline(arrow, Color(1, 0.973, 0.839, 0.95), 2.0, true)
 	if tile.special != "":
 		deco.append({"y": s * 0.12, "k": "structure"})
+	if tile.is_station():
+		deco.append({"y": s * 0.08, "k": "station"})
 	deco.sort_custom(func(a, b): return a.y < b.y)
 	for o in deco:
 		match o.k:
@@ -363,6 +504,8 @@ static func draw_tile(ci: CanvasItem, tile: Tile) -> void:
 				house(ci, o.p.x, o.p.y, o.sz, o.flip)
 			"structure":
 				structure(ci, tile.special, 0, 0, s)
+			"station":
+				station(ci, 0, 0, s)
 	if tile.gold:
 		star(ci, Vector2(s * 0.46, -s * 0.52), s * 0.15, Color("#fff3b0"))
 		star(ci, Vector2(-s * 0.5, s * 0.18), s * 0.09, Color("#fff3b0"))

@@ -37,6 +37,9 @@ func play_run(seed_val: int) -> Dictionary:
 				continue
 			s.cur.rot = best.rot
 			var res := s.place(best.q, best.r)
+			if res.is_empty():
+				push_error("bot picked an illegal move")
+				return {"cleared": -1, "total": s.total, "scores": scores}
 			s.finish_placement(res.entry, res.ev)
 			s.busy = false
 		var h := Rules.harvest_calc(s)
@@ -61,6 +64,8 @@ func best_move(s: RunState) -> Dictionary:
 	for c in s.cands.values():
 		for rot in 6:
 			s.cur.rot = rot
+			if not Rules.can_place(s, c.q, c.r, s.cur):
+				continue
 			var ev := Rules.evaluate(s, c.q, c.r, s.cur)
 			var k: Vector2i = c.k
 			s.board[k] = RunState.make_entry(c.q, c.r, s.cur)

@@ -232,6 +232,8 @@ func _process(dt: float) -> void:
 		ghost.apply_anim(yo * TileArt.S0, 1, 1)
 		ghost.yo_px = yo * cam.size
 		ghost.set_mill_angle(mill_angle)
+		var blocked: bool = game.cur_eval != null and not game.cur_eval.get("blocked", []).is_empty()
+		ghost.modulate = Color(1, 0.62, 0.6, 0.8) if blocked else Color(1, 1, 1, 0.92)
 	slot_layer.queue_redraw()
 	fx_layer.queue_redraw()
 
@@ -322,6 +324,23 @@ func _draw_indicators(c: Vector2, s: float) -> void:
 			var w := maxf(2, s * 0.07)
 			ci.draw_dashed_line(p1 + Vector2(0, 1), p2 + Vector2(0, 1), Color(0, 0, 0, 0.3), w + 1, s * 0.075, true, true)
 			ci.draw_dashed_line(p1, p2, Color("#e5534b"), w, s * 0.075, true, true)
+	# river / railroad links, and edges where the tile would cut one
+	var blocked: Array = ev.get("blocked", [])
+	for i in 6:
+		var fp: int = ev.feat_per[i]
+		var p := c + TileArt.edge_mid(i, s * 0.7)
+		var rad := maxf(3.5, s * 0.085)
+		if blocked.has(i):
+			var d := rad * 1.1
+			for pair in [[Vector2(-d, -d), Vector2(d, d)], [Vector2(-d, d), Vector2(d, -d)]]:
+				ci.draw_line(p + pair[0] + Vector2(0, 1), p + pair[1] + Vector2(0, 1), Color(0, 0, 0, 0.4), maxf(3, s * 0.08) + 1.5, true)
+				ci.draw_line(p + pair[0], p + pair[1], Color("#e5534b"), maxf(3, s * 0.08), true)
+		elif fp == 1:
+			ci.draw_circle(p + Vector2(0, 1), rad + 1.5, Color(0, 0, 0, 0.3))
+			ci.draw_circle(p, rad + 1.5, Color.WHITE)
+			ci.draw_circle(p, rad, Defs.top(ev.feat_kind[i]))
+		elif fp == 0:
+			ci.draw_arc(p, rad, 0, TAU, 16, Color(0.9, 0.33, 0.29, 0.85), maxf(1.5, s * 0.035), true)
 
 
 func _draw_ray_preview(s: float) -> void:

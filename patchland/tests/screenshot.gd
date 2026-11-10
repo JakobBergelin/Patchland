@@ -44,14 +44,24 @@ func _mouse(pos: Vector2, button := MOUSE_BUTTON_NONE, pressed := false) -> void
 
 
 func _cand_screen() -> Vector2:
-	# pick the candidate slot that matches the most edges
+	# pick the legal slot + rotation that matches the most edges, and turn the tile to it
 	var best = null
 	var best_score := -1
+	var best_rot := game.S.cur.rot
+	var rot0 := game.S.cur.rot
 	for c in game.S.cands.values():
-		var ev := Rules.evaluate(game.S, c.q, c.r, game.S.cur)
-		if ev.matches > best_score:
-			best_score = ev.matches
-			best = c
+		for rot in 6:
+			game.S.cur.rot = rot
+			if not Rules.can_place(game.S, c.q, c.r, game.S.cur):
+				continue
+			var ev := Rules.evaluate(game.S, c.q, c.r, game.S.cur)
+			var score: int = ev.matches + ev.feat_matches
+			if score > best_score or (score == best_score and rot == rot0):
+				best_score = score
+				best = c
+				best_rot = rot
+	game.S.cur.rot = best_rot
+	game.refresh_eval()
 	return game.board.global_position + game.board.to_s(best.q, best.r)
 
 
@@ -75,6 +85,9 @@ func _run() -> void:
 	await _wait(20)
 	print("right-click rotation: %d -> %d" % [rot0, game.S.cur.rot])
 	await _shot("03_after_right_click")
+	p = _cand_screen()  # the rotation may have made that spot illegal (it would cut a line)
+	_mouse(p)
+	await _wait(2)
 	_mouse(p, MOUSE_BUTTON_LEFT, true)
 	_mouse(p, MOUSE_BUTTON_LEFT, false)
 	await _wait(25)

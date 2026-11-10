@@ -58,6 +58,7 @@ var toast_lbl: Label
 var overlay: ColorRect
 var sheet: PanelContainer
 var sheet_box: VBoxContainer
+var sheet_scroll: ScrollContainer
 
 
 # ======================================================================
@@ -453,9 +454,15 @@ func _build_ui() -> void:
 	sheet.add_theme_stylebox_override("panel", sheet_sb)
 	sheet.custom_minimum_size.x = SHEET_W
 	center.add_child(sheet)
+	sheet_scroll = ScrollContainer.new()
+	sheet_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sheet_scroll.custom_minimum_size.x = SHEET_W - 44
+	sheet.add_child(sheet_scroll)
 	sheet_box = VBoxContainer.new()
 	sheet_box.add_theme_constant_override("separation", 10)
-	sheet.add_child(sheet_box)
+	sheet_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sheet_scroll.add_child(sheet_box)
+	overlay.resized.connect(_fit_sheet)
 
 
 # ======================================================================
@@ -549,7 +556,14 @@ func place() -> void:
 		return
 	var q: int = sel.q
 	var r: int = sel.r
+	if not Rules.can_place(S, q, r, S.cur):
+		sfx.dud()
+		board.shake(3)
+		toast("That would cut a river or railroad. Rotate it or try another spot.")
+		return
 	var res := S.place(q, r)
+	if res.is_empty():
+		return
 	var entry: Dictionary = res.entry
 	var ev: Dictionary = res.ev
 	var events: Array = res.events
@@ -586,6 +600,24 @@ func place() -> void:
 			board.fx.edge_fx(wx, wy, i, c, tile.edge(i))
 			board.bump(Vector2i(q, r) + Hex.DIRS[i])
 			sfx.tick(st + S.streak))
+		t += gap
+	# linked rivers and railroads
+	for i in 6:
+		if ev.feat_per[i] != 1:
+			continue
+		var fc: int = ev.feat_chips[i]
+		var f: String = ev.feat_kind[i]
+		var stf := step
+		step += 1
+		after(t, func():
+			run.chips += fc
+			show_calc(run.chips, run.mult)
+			pop(chips_panel)
+			board.fx.edge_fx(wx, wy, i, fc, f)
+			var a := -i * PI / 3
+			board.fx.float_at(wx + cos(a) * 0.6, wy + sin(a) * 0.6 - 0.75, Defs.name_of(f), "chips", 0.6, false, 800, 14)
+			board.bump(Vector2i(q, r) + Hex.DIRS[i])
+			sfx.tick(stf + S.streak + 2))
 		t += gap
 	if ev.chip_add:
 		var st2 := step
@@ -684,6 +716,15 @@ func finish_placement(entry: Dictionary, ev: Dictionary) -> void:
 		board.fx.quest_fx(qp.x, qp.y)
 		board.fx.float_at(qp.x, qp.y - 1.7, "Quest: +2 tiles, +" + Defs.fmt(qd.bonus), "gold", 1, true, 1400)
 		sfx.quest()
+	if not res.line.is_empty():
+		# the river or railroad now runs end to end: celebrate along the whole line
+		for x in res.line.tiles:
+			board.bump(x.k)
+			var xp := Hex.wpos(x.q, x.r)
+			board.fx.ring(xp.x, xp.y, 600, Defs.top(res.line.f), 0.5)
+		var endw := "water ends" if res.line.f == "river" else "stations"
+		board.fx.float_at(w.x, w.y - 2.3, "%s complete: %d %s, scores in the harvest" % [Defs.name_of(res.line.f), res.line.ends, endw], "chips", 0.95, true, 1600)
+		sfx.pick()
 	if S.tiles_left <= 0:
 		after(450, start_harvest)
 	else:
@@ -751,7 +792,7 @@ func start_harvest() -> void:
 				acc.mult += r.mult
 				show_calc(acc.chips, acc.mult)
 				pop(mult_panel)
-				board.fx.float_at(lp.x, lp.y - 1.2, "%s ×%d: +%d mult" % [Defs.TER[r.t].name, r.n, r.mult], "mult", 0.9, true, 1000)
+				board.fx.float_at(lp.x, lp.y - 1.2, ("%s ×%d, %d %s: +%d mult" % [Defs.name_of(r.t), r.n, r.ends, "stations" if r.t == "rail" else "water ends", r.mult]) if r.has("ends") else ("%s ×%d: +%d mult" % [Defs.name_of(r.t), r.n, r.mult]), "mult", 0.9, true, 1000)
 				sfx.mult(mini(10, r.mult))
 				board.shake(minf(6, 1 + r.mult)))
 		else:
@@ -1024,13 +1065,22 @@ func render_relics() -> void:
 func tile_hint(t: Tile) -> String:
 	if t == null:
 		return ""
+	var out := ""
+	if S != null and S.line_rule_lifted:
+		out += "No spot keeps every river and railroad intact, so this tile may cut one. "
 	if t.special != "":
-		return "%s: %s Every tile hit scores its land again, and hitting another special sets it off. " % [Defs.SPECIALS[t.special].name, Defs.SPECIALS[t.special].desc]
+		return out + "%s: %s Every tile hit scores its land again, and hitting another special sets it off. " % [Defs.SPECIALS[t.special].name, Defs.SPECIALS[t.special].desc]
+	if t.is_station():
+		out += "Station: railroads start and end in cities. A line between two stations scores in the harvest, +1 mult per station. "
+	elif t.feature() == "rail":
+		out += "Railroad: link track for +8 chips and +1 mult per edge. Track must meet track. "
+	elif t.feature() == "river":
+		out += "River: flows out of and into water. Link it for +6 chips and +1 mult per edge; it can't be cut. A river that reaches water at both ends scores in the harvest. "
 	if t.has_quest():
-		return "Quest: link %d %s tiles through matching edges. " % [t.quest.need, Defs.TER[t.quest.t].name.to_lower()]
+		return out + "Quest: link %d %s tiles through matching edges. " % [t.quest.need, Defs.TER[t.quest.t].name.to_lower()]
 	if t.gold:
-		return "Golden tile: its mult is doubled. "
-	return ""
+		return out + "Golden tile: its mult is doubled. "
+	return out
 
 
 func update_calc() -> void:
@@ -1049,9 +1099,22 @@ func update_calc() -> void:
 			show_calc(0, 0, 0)
 		hint_lbl.text = tile_hint(S.cur) + "Hover a dashed spot, or use the arrow keys, to preview your tile. Right-click or scroll to rotate."
 		return
+	if not cur_eval.blocked.is_empty():
+		_set_calc_idle(true)
+		show_calc(0, 0, 0)
+		hint_lbl.text = "Blocked: this would cut a river or railroad. Every river and track edge must meet the same on the other side. Rotate it or try another spot."
+		return
 	_set_calc_idle(false)
 	show_calc(cur_eval.chips, cur_eval.mult, cur_eval.total)
 	var h := "%d of %d edges match." % [cur_eval.matches, cur_eval.nb]
+	if cur_eval.feat_matches:
+		var kinds: Array[String] = []
+		for i in 6:
+			if cur_eval.feat_per[i] == 1:
+				var nm := Defs.name_of(cur_eval.feat_kind[i]).to_lower()
+				if not kinds.has(nm):
+					kinds.append(nm)
+		h += " Links %s: +%d chips, +%d mult." % [" and ".join(kinds), cur_eval.feat_sum, cur_eval.feat_matches]
 	var hits := Rules.count_hits(cur_eval.events)
 	if hits:
 		h += " Rays hit %d tile%s for +%d chips." % [hits, "s" if hits > 1 else "", cur_eval.ray_chips]
@@ -1064,7 +1127,7 @@ func update_calc() -> void:
 		extras.append("%s ×%d" % [m[0], m[1]])
 	if not extras.is_empty():
 		h += " " + ", ".join(extras) + "."
-	elif not cur_eval.matches and not hits:
+	elif not cur_eval.matches and not hits and not cur_eval.feat_matches:
 		h += " Rotate to find a match."
 	if cur_eval.quests:
 		h += (" Finishes %d quests." % cur_eval.quests) if cur_eval.quests > 1 else " Finishes a quest."
@@ -1076,7 +1139,7 @@ func update_calc() -> void:
 
 
 func update_buttons() -> void:
-	place_btn.disabled = sel == null or S == null or S.busy
+	place_btn.disabled = sel == null or S == null or S.busy or (cur_eval != null and not cur_eval.blocked.is_empty())
 	redraw_btn.disabled = S == null or S.busy or S.redraws <= 0
 	redraw_badge.get_parent().modulate.a = 0.4 if redraw_btn.disabled else 1.0
 	redraw_badge.get_parent().get_parent().modulate.a = 0.4 if redraw_btn.disabled else 1.0
@@ -1198,6 +1261,7 @@ func open_overlay() -> void:
 		c.queue_free()
 	overlay.visible = true
 	set_sel(null, true)
+	_fit_sheet.call_deferred()
 	if not reduced:
 		sheet.pivot_offset = Vector2(SHEET_W / 2, 200)
 		sheet.modulate.a = 0
@@ -1212,6 +1276,15 @@ func close_overlay() -> void:
 	overlay.visible = false
 	for c in sheet_box.get_children():
 		c.queue_free()
+
+
+## Sizes the sheet to its content, scrolling when it is taller than the window.
+func _fit_sheet() -> void:
+	if not overlay.visible:
+		return
+	var want := sheet_box.get_combined_minimum_size().y
+	sheet_scroll.custom_minimum_size.y = minf(want, maxf(200, overlay.size.y - 80))
+	sheet_scroll.scroll_vertical = 0
 
 
 func _go_button(text: String, fn: Callable) -> Button:
@@ -1237,11 +1310,13 @@ func show_intro() -> void:
 	sheet_box.add_child(_para("Lay hex tiles to grow a patch of countryside. Every edge that matches the land beside it adds its chips and +1 mult, and matching every neighbor doubles the mult."))
 	sheet_box.add_child(_para("When your tiles run out, the harvest scores every region of linked land on the whole board, and bigger regions add more mult. Your placements plus the harvest must reach the goal."))
 	sheet_box.add_child(_para("Windmills, lighthouses and bell towers fire rays that score every tile they hit, and a ray that hits another special tile sets it off too. Golden tiles, quest flags, perfect streaks and boss rounds (3, 6 and 8) add extra twists."))
+	sheet_box.add_child(_para("Rivers and railroads score extra when they link across an edge. Railroads run between stations in cities, rivers flow out of and into water, and you can never place a tile that cuts one. A line that runs end to end scores again in the harvest."))
 	var legend := HFlowContainer.new()
 	legend.add_theme_constant_override("h_separation", 12)
 	legend.add_theme_constant_override("v_separation", 6)
 	var order: Array = Defs.TKEYS.duplicate()
 	order.sort_custom(func(a, b): return Defs.TER[a].chips > Defs.TER[b].chips)
+	order.append_array(Defs.FKEYS)
 	for t in order:
 		var it := HBoxContainer.new()
 		it.add_theme_constant_override("separation", 6)
@@ -1251,8 +1326,8 @@ func show_intro() -> void:
 		ic.custom_minimum_size = Vector2(12, 13)
 		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		it.add_child(ic)
-		it.add_child(_lbl(Defs.TER[t].name, 14, Pal.soft))
-		it.add_child(_lbl(str(Defs.TER[t].chips), 14, Pal.ink, true))
+		it.add_child(_lbl(Defs.name_of(t), 14, Pal.soft))
+		it.add_child(_lbl(str((Defs.FEAT[t] if Defs.FEAT.has(t) else Defs.TER[t]).chips), 14, Pal.ink, true))
 		legend.add_child(it)
 	sheet_box.add_child(legend)
 	sheet_box.add_child(_para("Rotate by right-clicking (shift + right-click turns the other way), with the scroll wheel, R / Q, the Rotate button, or by clicking your tile. Redraw swaps your tile for the next one.", 14, Pal.soft))

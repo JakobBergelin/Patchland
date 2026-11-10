@@ -26,6 +26,13 @@ Patchland is a hex tile-placement roguelite: Dorfromantik's edge matching plus B
 - 8 rounds, goals `[1500, 5000, 12000, 35000, 75000, 110000, 240000, 420000]`. Bosses on rounds 3, 6 and 8; beating one gives two relic picks.
 - 20 relics, listed in the reference's `RELICS` array.
 
+### Rivers and railroads (Godot-only, not in the reference)
+- About 30% of non-special tiles carry a river (55%) or a railroad, drawn over their land. Feature tiles keep their normal mix of 1-4 biomes; feature edges never sit on water edges.
+- **Linking:** a river or rail edge that meets the same feature across an edge adds its chips (river 6, rail 8) and +1 mult, like a matching land edge. A river edge that runs into a plain water edge (a river mouth, `Rules.is_mouth`) counts as a matched land edge scored as water (6 chips, +1 mult), so it never breaks a perfect placement; it is not scored a second time as a river link. Ray hits count these links too. Drought zeroes river chips.
+- **No cutting:** a placement is illegal if any shared edge leaves a river or track dangling (`Rules.line_breaks` / `feat_cut`): rail must meet rail, and a river must meet river or water. If the current tile has no legal spot in any rotation, the rule is lifted for that tile (`RunState.line_rule_lifted`).
+- **Railroads start and end in cities:** a station is a rail tile with exactly one rail edge, leaving from a village edge. Track pieces (2-3 rail edges) are only dealt while a railroad on the board has an open end; otherwise railroads come as stations. Rivers have no start tile: river pieces are dealt while a river end or a water edge is open, otherwise no river is dealt.
+- **Harvest:** a railroad network scores only between 2+ stations; a river network only once it reaches water at 2+ ends. Then: feature chips per tile, +1 mult per 3 tiles, +1 mult per end. Finishing a line during play shows a "complete" celebration.
+
 ## Port order
 1. Core rules + headless bot simulation matching the reference's results.
 2. Tile art and board rendering.
@@ -48,6 +55,8 @@ Hover a dashed slot to preview, left click places. **Right click rotates the til
 Run headless from the project folder, for example:
 `godot --headless --path . -s res://tests/run_sim.gd -- --runs 3 --seed 1`
 (on Windows, use the `_console.exe` build of Godot so output prints to the terminal). Run the simulation after any balance or rules change. A run takes ~30 s.
+
+Rivers/railroads rule checks: `godot --headless --path . -s res://tests/features.gd` (add `-- <output folder>` without `--headless` to also save screenshots of a blocked and a legal spot). Run after any change to lines, dealing or scoring.
 
 Visual smoke test (needs a window, not `--headless`): `godot --path . -s res://tests/screenshot.gd -- <output folder>` plays the opening, right-clicks to rotate (prints the rotation change), finishes round 1 and saves PNGs of each stage.
 
