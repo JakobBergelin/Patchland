@@ -59,6 +59,11 @@ var overlay: ColorRect
 var sheet: PanelContainer
 var sheet_box: VBoxContainer
 var sheet_scroll: ScrollContainer
+var hud_m: MarginContainer
+var rel_m: MarginContainer
+var tray_m: MarginContainer
+var fs_icon: IconView
+const CONTENT_W := 1180.0
 
 
 # ======================================================================
@@ -90,6 +95,8 @@ func _load_settings() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SETTINGS_PATH) == OK:
 		muted = cfg.get_value("game", "muted", false)
+		if cfg.get_value("game", "fullscreen", false) and DisplayServer.get_name() != "headless":
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 
 
 func _save_setting(key: String, value) -> void:
@@ -111,10 +118,39 @@ func save_best(n: int) -> void:
 		_save_setting("best", n)
 
 
+## The board uses the whole window; the HUD, relic strip and tray stay a readable
+## width (CONTENT_W) in the middle, which matters in fullscreen on wide screens.
 func _layout() -> void:
-	var w := minf(960, size.x)
-	app.position = Vector2((size.x - w) / 2, 0)
-	app.size = Vector2(w, size.y)
+	app.position = Vector2.ZERO
+	app.size = size
+	var side := maxf(0, (size.x - CONTENT_W) / 2)
+	hud_m.add_theme_constant_override("margin_left", int(side + 16))
+	hud_m.add_theme_constant_override("margin_right", int(side + 16))
+	rel_m.add_theme_constant_override("margin_left", int(side + 16))
+	rel_m.add_theme_constant_override("margin_right", int(side + 16))
+	tray_m.add_theme_constant_override("margin_left", int(side))
+	tray_m.add_theme_constant_override("margin_right", int(side))
+	render_fullscreen()
+
+
+func is_fullscreen() -> bool:
+	var m := DisplayServer.window_get_mode()
+	return m == DisplayServer.WINDOW_MODE_FULLSCREEN or m == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+
+
+func set_fullscreen(on: bool) -> void:
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if on else DisplayServer.WINDOW_MODE_WINDOWED)
+	_save_setting("fullscreen", on)
+	render_fullscreen()
+
+
+func toggle_fullscreen() -> void:
+	set_fullscreen(not is_fullscreen())
+
+
+func render_fullscreen() -> void:
+	if fs_icon:
+		fs_icon.kind = "windowed" if is_fullscreen() else "fullscreen"
 
 
 # ---------- ui helpers ----------
@@ -194,7 +230,7 @@ func _icon_btn() -> Button:
 func _small_stat(caption: String) -> Array:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", -2)
-	box.add_child(_lbl(caption, 13, Pal.soft))
+	box.add_child(_lbl(caption, 14, Pal.soft))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 0)
 	var b := _lbl("", 21, Pal.ink, true)
@@ -209,7 +245,7 @@ func _build_ui() -> void:
 	add_child(app)
 
 	# --- HUD ---
-	var hud_m := MarginContainer.new()
+	hud_m = MarginContainer.new()
 	for side in [["left", 16], ["right", 16], ["top", 12], ["bottom", 6]]:
 		hud_m.add_theme_constant_override("margin_" + side[0], side[1])
 	app.add_child(hud_m)
@@ -230,13 +266,13 @@ func _build_ui() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grow.add_child(spacer)
-	goal_lbl = _lbl("Goal 0", 14, Pal.soft)
+	goal_lbl = _lbl("Goal 0", 15, Pal.soft, true)
 	grow.add_child(goal_lbl)
 	goal.add_child(grow)
 	bar = GoalBar.new()
-	bar.custom_minimum_size.y = 8
+	bar.custom_minimum_size.y = 10
 	goal.add_child(bar)
-	proj_lbl = _lbl("", 13, Pal.soft)
+	proj_lbl = _lbl("", 14, Pal.soft)
 	proj_lbl.clip_text = true
 	goal.add_child(proj_lbl)
 	hud.add_child(goal)
@@ -259,6 +295,20 @@ func _build_ui() -> void:
 	var mb_wrap := CenterContainer.new()
 	mb_wrap.add_child(mute_btn)
 	hud.add_child(mb_wrap)
+	var fs_btn := _icon_btn()
+	fs_btn.tooltip_text = "Fullscreen (F11)"
+	fs_icon = IconView.new()
+	fs_icon.color = Pal.ink
+	fs_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	fs_icon.offset_left = 9
+	fs_icon.offset_top = 9
+	fs_icon.offset_right = -9
+	fs_icon.offset_bottom = -9
+	fs_btn.add_child(fs_icon)
+	fs_btn.pressed.connect(toggle_fullscreen)
+	var fs_wrap := CenterContainer.new()
+	fs_wrap.add_child(fs_btn)
+	hud.add_child(fs_wrap)
 	var help_btn := _icon_btn()
 	help_btn.text = "?"
 	help_btn.tooltip_text = "How to play"
@@ -269,7 +319,7 @@ func _build_ui() -> void:
 	render_mute()
 
 	# --- relic strip ---
-	var rel_m := MarginContainer.new()
+	rel_m = MarginContainer.new()
 	rel_m.add_theme_constant_override("margin_left", 16)
 	rel_m.add_theme_constant_override("margin_right", 16)
 	rel_m.add_theme_constant_override("margin_bottom", 8)
@@ -326,7 +376,9 @@ func _build_ui() -> void:
 	tray_sb.corner_radius_top_right = 18
 	tray_sb.border_width_bottom = 0
 	tray.add_theme_stylebox_override("panel", tray_sb)
-	app.add_child(tray)
+	tray_m = MarginContainer.new()
+	app.add_child(tray_m)
+	tray_m.add_child(tray)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
 	tray.add_child(row)
@@ -390,7 +442,7 @@ func _build_ui() -> void:
 	streak_panel.add_child(streak_lbl)
 	streak_panel.visible = false
 	calc.add_child(streak_panel)
-	hint_lbl = _lbl("", 14, Pal.soft)
+	hint_lbl = _lbl("", 15, Pal.soft)
 	hint_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint_lbl.custom_minimum_size = Vector2(120, 40)
 	readout.add_child(hint_lbl)
@@ -401,7 +453,7 @@ func _build_ui() -> void:
 	actions.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(actions)
 	rot_btn = _btn("Rotate")
-	rot_btn.tooltip_text = "Rotate (right-click, scroll, R / Q)"
+	rot_btn.tooltip_text = "Rotate (right-click, Ctrl + scroll, R / Q)"
 	rot_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rot_btn.size_flags_stretch_ratio = 1.0
 	rot_btn.pressed.connect(func(): rotate(1))
@@ -716,15 +768,18 @@ func finish_placement(entry: Dictionary, ev: Dictionary) -> void:
 		board.fx.quest_fx(qp.x, qp.y)
 		board.fx.float_at(qp.x, qp.y - 1.7, "Quest: +2 tiles, +" + Defs.fmt(qd.bonus), "gold", 1, true, 1400)
 		sfx.quest()
-	if not res.line.is_empty():
-		# the river or railroad now runs end to end: celebrate along the whole line
-		for x in res.line.tiles:
+	for ln in res.lines:
+		# a river or railroad was closed: celebrate along the whole line and pay the bonus
+		var net: Dictionary = ln.net
+		for x in net.tiles:
 			board.bump(x.k)
 			var xp := Hex.wpos(x.q, x.r)
-			board.fx.ring(xp.x, xp.y, 600, Defs.top(res.line.f), 0.5)
-		var endw := "water ends" if res.line.f == "river" else "stations"
-		board.fx.float_at(w.x, w.y - 2.3, "%s complete: %d %s, scores in the harvest" % [Defs.name_of(res.line.f), res.line.ends, endw], "chips", 0.95, true, 1600)
-		sfx.pick()
+			board.fx.ring(xp.x, xp.y, 650, Defs.top(net.f), 0.7)
+			board.fx.burst(xp.x, xp.y - 0.3, 8, [Defs.top(net.f), Color.WHITE], {"speed": 2.2, "up": 1.8, "grav": 5.0, "life": 0.8})
+		var verb := "River closed" if net.f == "river" else "Railroad closed"
+		board.fx.float_at(w.x, w.y - 2.3, "%s: +%s" % [verb, Defs.fmt(ln.bonus)], "gold", 1.15, true, 1600)
+		board.shake(5)
+		sfx.quest()
 	if S.tiles_left <= 0:
 		after(450, start_harvest)
 	else:
@@ -904,6 +959,10 @@ func refresh_eval() -> void:
 				n += 1
 		cur_eval.quests = n
 		cur_eval.harvest = Rules.harvest_calc(S).total
+		var close_pts := 0
+		for net in S.closed_lines(S.board[k]):
+			close_pts += Rules.close_bonus(S, net)
+		cur_eval.close_bonus = close_pts
 		S.board.erase(k)
 	update_calc()
 	update_buttons()
@@ -1097,7 +1156,7 @@ func update_calc() -> void:
 			show_calc(calc_hold.chips, calc_hold.mult, calc_hold.total)
 		else:
 			show_calc(0, 0, 0)
-		hint_lbl.text = tile_hint(S.cur) + "Hover a dashed spot, or use the arrow keys, to preview your tile. Right-click or scroll to rotate."
+		hint_lbl.text = tile_hint(S.cur) + "Hover a dashed spot, or use the arrow keys, to preview your tile. Right-click to rotate. Scroll to zoom, drag or WASD to move the view, F to see the whole board."
 		return
 	if not cur_eval.blocked.is_empty():
 		_set_calc_idle(true)
@@ -1129,6 +1188,8 @@ func update_calc() -> void:
 		h += " " + ", ".join(extras) + "."
 	elif not cur_eval.matches and not hits and not cur_eval.feat_matches:
 		h += " Rotate to find a match."
+	if cur_eval.get("close_bonus", 0):
+		h += " Closes a line: +%s bonus." % Defs.fmt(cur_eval.close_bonus)
 	if cur_eval.quests:
 		h += (" Finishes %d quests." % cur_eval.quests) if cur_eval.quests > 1 else " Finishes a quest."
 	var dh: int = cur_eval.harvest - S.harvest_base
@@ -1223,11 +1284,35 @@ func _on_click(h) -> void:
 	place()
 
 
+## Fullscreen works everywhere, even with an overlay open: F11 or Alt+Enter.
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F11 or (event.keycode == KEY_ENTER and event.alt_pressed):
+			toggle_fullscreen()
+			get_viewport().set_input_as_handled()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed):
 		return
 	if overlay.visible or S == null:
 		return
+	# camera keys work at any time, harvest included
+	match event.keycode:
+		KEY_W, KEY_A, KEY_S, KEY_D:
+			return  # held keys, handled by the board each frame
+		KEY_EQUAL, KEY_PLUS, KEY_KP_ADD:
+			board.zoom_at(board.size / 2, 1.2)
+			get_viewport().set_input_as_handled()
+			return
+		KEY_MINUS, KEY_KP_SUBTRACT:
+			board.zoom_at(board.size / 2, 1 / 1.2)
+			get_viewport().set_input_as_handled()
+			return
+		KEY_HOME, KEY_F:
+			board.reset_view()
+			get_viewport().set_input_as_handled()
+			return
 	if harvesting:
 		speed_up()
 		return
@@ -1330,7 +1415,7 @@ func show_intro() -> void:
 		it.add_child(_lbl(str((Defs.FEAT[t] if Defs.FEAT.has(t) else Defs.TER[t]).chips), 14, Pal.ink, true))
 		legend.add_child(it)
 	sheet_box.add_child(legend)
-	sheet_box.add_child(_para("Rotate by right-clicking (shift + right-click turns the other way), with the scroll wheel, R / Q, the Rotate button, or by clicking your tile. Redraw swaps your tile for the next one.", 14, Pal.soft))
+	sheet_box.add_child(_para("Rotate by right-clicking (shift + right-click turns the other way), Ctrl + scroll, R / Q, the Rotate button, or by clicking your tile. Redraw swaps your tile for the next one. Scroll to zoom, drag or use WASD to move the view, and press F (or double-click empty ground) to see the whole board again. F11 toggles fullscreen.", 14, Pal.soft))
 	var best := get_best()
 	if best > 0:
 		sheet_box.add_child(_para("Best run: %s points" % Defs.fmt(best), 14, Pal.soft))
@@ -1437,7 +1522,7 @@ func _stats() -> GridContainer:
 	g.columns = 2
 	g.add_theme_constant_override("h_separation", 8)
 	g.add_theme_constant_override("v_separation", 8)
-	for it in [[Defs.fmt(S.best_harvest), "Best harvest"], [str(S.perfects), "Perfects"], [str(S.best_streak), "Best streak"], [str(S.quests), "Quests"]]:
+	for it in [[Defs.fmt(S.best_harvest), "Best harvest"], [str(S.perfects), "Perfects"], [str(S.best_streak), "Best streak"], [str(S.quests), "Quests"], [str(S.lines_closed), "Lines closed"], [str(S.relics.size()), "Relics"]]:
 		var p := PanelContainer.new()
 		p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		p.add_theme_stylebox_override("panel", _sb(Pal.bg2, 12, Color(0, 0, 0, 0), 0, Vector4(10, 8, 10, 8)))

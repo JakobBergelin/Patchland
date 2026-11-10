@@ -17,6 +17,7 @@ var almanac := 0
 var streak := 0
 var best_streak := 0
 var quests := 0
+var lines_closed := 0
 var perfects := 0
 var best_harvest := 0
 var survey_bonus := 0
@@ -82,6 +83,7 @@ func new_run(seed_val := -1) -> void:
 	streak = 0
 	best_streak = 0
 	quests = 0
+	lines_closed = 0
 	perfects = 0
 	best_harvest = 0
 	survey_bonus = 0
@@ -161,17 +163,18 @@ func place(q: int, r: int) -> Dictionary:
 
 
 ## Applies the placement score, streak and quest completion.
-## Returns {perfect_streak, streak_lost, quests: [{e, bonus}], line: {tiles, ends, f} or {}}.
+## Returns {perfect_streak, streak_lost, quests: [{e, bonus}], lines: [{net, bonus}]}
+## where lines are rivers/railroads this placement closed.
 func finish_placement(entry: Dictionary, ev: Dictionary) -> Dictionary:
 	round_score += ev.total
 	total += ev.total
-	var res := {"perfect_streak": 0, "streak_lost": false, "quests": [], "line": {}}
-	# a river or railroad that now runs end to end (lake to lake, station to station)
-	var f: String = entry.tile.feature()
-	if f != "" and ev.feat_matches > 0:
-		var net := Rules.line_network(self, entry, f)
-		if net.ends >= 2:
-			res.line = net
+	var res := {"perfect_streak": 0, "streak_lost": false, "quests": [], "lines": []}
+	for net in closed_lines(entry):
+		var bonus := Rules.close_bonus(self, net)
+		round_score += bonus
+		total += bonus
+		lines_closed += 1
+		res.lines.append({"net": net, "bonus": bonus})
 	if ev.perfect:
 		streak += 1
 		perfects += 1
@@ -198,6 +201,32 @@ func finish_placement(entry: Dictionary, ev: Dictionary) -> Dictionary:
 			res.quests.append({"e": e, "bonus": bonus})
 	harvest_base = Rules.harvest_calc(self).total
 	return res
+
+
+## Lines that the tile just placed at `entry` closed: its own river/railroad, and any
+## river that now flows into one of its water edges. A line is closed when it has
+## no open ends and is finished at both ends (stations, or water for rivers).
+## A closed line has nothing left to extend, so each one is reported only once.
+func closed_lines(entry: Dictionary) -> Array:
+	var starts: Array = []
+	var f: String = entry.tile.feature()
+	if f != "":
+		starts.append([entry, f])
+	for i in 6:
+		var n = board.get(entry.k + Hex.DIRS[i])
+		if n != null and Rules.is_mouth(entry.tile, i, n.tile) and n.tile.feat_at((i + 3) % 6) == "river":
+			starts.append([n, "river"])
+	var out: Array = []
+	var seen := {}
+	for st in starts:
+		if seen.has([st[0].k, st[1]]):
+			continue
+		var net := Rules.line_network(self, st[0], st[1])
+		for x in net.tiles:
+			seen[[x.k, st[1]]] = true
+		if net.open == 0 and net.ends >= 2:
+			out.append(net)
+	return out
 
 
 func apply_harvest(points: int) -> void:

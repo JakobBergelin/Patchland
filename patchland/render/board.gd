@@ -29,6 +29,15 @@ var world: Node2D
 var tile_layer: Node2D
 var fx_layer: Node2D
 var _down = null  # Vector2 of left-press position
+var _dragging := false  # left or middle drag is panning the view
+var _middle := false
+
+const ZOOM_MIN := 0.45
+const ZOOM_MAX := 4.0
+const KEY_PAN_SPEED := 700.0  # screen px per second for WASD
+## Player camera on top of the auto-fit: zoom factor and pan offset in world units.
+var user_zoom := 1.0
+var user_pan := Vector2.ZERO
 
 
 func _ready() -> void:
@@ -77,6 +86,7 @@ func clear_tiles() -> void:
 	shake_amp = 0
 	punch = 0
 	snap_cam = true
+	reset_view()
 
 
 func add_tile(entry: Dictionary, born: float) -> void:
@@ -130,11 +140,30 @@ func fit_view(points: Array, w: float, h: float, pad: float, max_s: float) -> Di
 	return {"size": s, "x": (x0 + x1) / 2, "y": (y0 + y1) / 2}
 
 
+## The auto-fit view (whole board plus slots) before the player's zoom/pan.
+func _fit() -> Dictionary:
+	var pts: Array = game.S.board.values() + game.S.cands.values()
+	return fit_view(pts, size.x, size.y, 14, 58)
+
+
+## Where the camera is heading: the auto-fit view, scaled by the player's zoom and
+## shifted by their pan (so the view keeps following the board as it grows).
+func _cam_target() -> Dictionary:
+	var t := _fit()
+	_clamp_pan(t)
+	return {"size": t.size * user_zoom, "x": t.x + user_pan.x, "y": t.y + user_pan.y}
+
+
+## Keeps the board within reach: the view centre stays inside the fitted area.
+func _clamp_pan(fit: Dictionary) -> void:
+	var half: Vector2 = size / fit.size / 2.0
+	user_pan = user_pan.clamp(-half, half)
+
+
 func _update_cam(dt: float) -> void:
 	if size.x < 2 or size.y < 2 or game == null or game.S == null:
 		return
-	var pts: Array = game.S.board.values() + game.S.cands.values()
-	var t := fit_view(pts, size.x, size.y, 14, 58)
+	var t := _cam_target()
 	if snap_cam or reduced:
 		cam = t
 		snap_cam = false
@@ -143,6 +172,42 @@ func _update_cam(dt: float) -> void:
 	cam.x += (t.x - cam.x) * k
 	cam.y += (t.y - cam.y) * k
 	cam.size += (t.size - cam.size) * k
+
+
+## Zooms by `factor`, keeping the world point under `screen_pos` fixed.
+func zoom_at(screen_pos: Vector2, factor: float) -> void:
+	if game == null or game.S == null:
+		return
+	var fit := _fit()
+	var under: Vector2 = (screen_pos - size / 2) / cam.size + Vector2(cam.x, cam.y)
+	user_zoom = clampf(user_zoom * factor, ZOOM_MIN, ZOOM_MAX)
+	var new_size: float = fit.size * user_zoom
+	var centre: Vector2 = under - (screen_pos - size / 2) / new_size
+	user_pan = centre - Vector2(fit.x, fit.y)
+	_clamp_pan(fit)
+	cam = {"size": new_size, "x": fit.x + user_pan.x, "y": fit.y + user_pan.y}
+
+
+## Moves the view by a screen-space delta (dragging the board along with the mouse).
+func pan_by(screen_delta: Vector2) -> void:
+	if game == null or game.S == null:
+		return
+	var d: Vector2 = screen_delta / cam.size
+	user_pan -= d
+	var fit := _fit()
+	_clamp_pan(fit)
+	cam.x = fit.x + user_pan.x
+	cam.y = fit.y + user_pan.y
+
+
+## Back to the automatic whole-board view.
+func reset_view() -> void:
+	user_zoom = 1.0
+	user_pan = Vector2.ZERO
+
+
+func is_view_default() -> bool:
+	return is_equal_approx(user_zoom, 1.0) and user_pan.length() < 0.01
 
 
 func ws(p: Vector2) -> Vector2:
@@ -202,6 +267,7 @@ func _process(dt: float) -> void:
 		punch = maxf(0, punch - dt * (punch * 10 + 0.02))
 	if not reduced:
 		mill_angle += dt * (9.0 if now < mill_fast_until else 1.1)
+	_key_pan(dt)
 	_update_cam(dt)
 
 	var off := Vector2.ZERO
@@ -249,9 +315,9 @@ func _draw_slots() -> void:
 		var cp := to_s(cnd.q, cnd.r)
 		var pts := TileArt.hex_pts(cp, s * 0.9)
 		if game.sel != null and game.sel.k == cnd.k:
-			slot_layer.draw_colored_polygon(pts, Color(1, 1, 1, 0.22))
+			slot_layer.draw_colored_polygon(pts, Color(1, 1, 1, 0.32))
 		for i in 6:
-			slot_layer.draw_dashed_line(pts[i], pts[(i + 1) % 6], Pal.slot, 1.25, dash, true, true)
+			slot_layer.draw_dashed_line(pts[i], pts[(i + 1) % 6], Pal.slot, maxf(1.8, s * 0.035), dash, true, true)
 
 
 func _screen_of(k: Vector2i) -> Vector2:
@@ -317,13 +383,13 @@ func _draw_indicators(c: Vector2, s: float) -> void:
 		var p1 := c + Vector2(cos(a1), sin(a1)) * r
 		var p2 := c + Vector2(cos(a2), sin(a2)) * r
 		if m == 1:
-			var w := maxf(2.5, s * 0.09)
-			ci.draw_line(p1 + Vector2(0, 1), p2 + Vector2(0, 1), Color(0, 0, 0, 0.3), w + 1, true)
+			var w := maxf(3.5, s * 0.11)
+			ci.draw_line(p1 + Vector2(0, 1), p2 + Vector2(0, 1), Color(0, 0, 0, 0.55), w + 3, true)
 			ci.draw_line(p1, p2, Color.WHITE, w, true)
 		else:
-			var w := maxf(2, s * 0.07)
-			ci.draw_dashed_line(p1 + Vector2(0, 1), p2 + Vector2(0, 1), Color(0, 0, 0, 0.3), w + 1, s * 0.075, true, true)
-			ci.draw_dashed_line(p1, p2, Color("#e5534b"), w, s * 0.075, true, true)
+			var w := maxf(3, s * 0.09)
+			ci.draw_dashed_line(p1 + Vector2(0, 1), p2 + Vector2(0, 1), Color(0, 0, 0, 0.55), w + 3, s * 0.075, true, true)
+			ci.draw_dashed_line(p1, p2, Color("#ff5247"), w, s * 0.075, true, true)
 	# river / railroad links, and edges where the tile would cut one
 	var blocked: Array = ev.get("blocked", [])
 	for i in 6:
@@ -365,20 +431,41 @@ func _draw_ray_preview(s: float) -> void:
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
-		hovered.emit(hit_test(event.position))
+		var mm := event as InputEventMouseMotion
+		# drag with the left (past a small threshold) or middle button to move the view
+		if _middle or (_down != null and (_dragging or mm.position.distance_to(_down) > 10)):
+			_dragging = true
+			pan_by(mm.relative)
+			mouse_default_cursor_shape = Control.CURSOR_DRAG
+		else:
+			hovered.emit(hit_test(mm.position))
+	elif event is InputEventMagnifyGesture:
+		zoom_at(event.position, event.factor)
+	elif event is InputEventPanGesture:
+		pan_by(-event.delta * 12)
 	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		match mb.button_index:
 			MOUSE_BUTTON_LEFT:
 				if mb.pressed:
+					if mb.double_click and not (game and game.harvesting) and hit_test(mb.position) == null:
+						reset_view()  # double-click empty ground: back to the whole board
 					_down = mb.position
+					_dragging = false
 				elif _down != null:
-					var moved: float = mb.position.distance_to(_down)
+					var was_drag := _dragging
 					_down = null
+					_dragging = false
+					mouse_default_cursor_shape = Control.CURSOR_ARROW
 					if game and game.harvesting:
 						speed_up_requested.emit()
-					elif moved <= 10:
+					elif not was_drag:
 						clicked.emit(hit_test(mb.position))
+			MOUSE_BUTTON_MIDDLE:
+				_middle = mb.pressed
+				if not mb.pressed:
+					_dragging = false
+					mouse_default_cursor_shape = Control.CURSOR_ARROW
 			MOUSE_BUTTON_RIGHT:
 				if mb.pressed:
 					if game and game.harvesting:
@@ -387,10 +474,23 @@ func _gui_input(event: InputEvent) -> void:
 						# keep the preview under the cursor, then rotate
 						hovered.emit(hit_test(mb.position))
 						rotate_requested.emit(-1 if mb.shift_pressed else 1)
-			MOUSE_BUTTON_WHEEL_DOWN:
+			MOUSE_BUTTON_WHEEL_DOWN, MOUSE_BUTTON_WHEEL_UP:
+				# scroll zooms toward the cursor; ctrl + scroll rotates the tile
 				if mb.pressed:
-					rotate_requested.emit(1)
-			MOUSE_BUTTON_WHEEL_UP:
-				if mb.pressed:
-					rotate_requested.emit(-1)
+					var up := mb.button_index == MOUSE_BUTTON_WHEEL_UP
+					if mb.ctrl_pressed:
+						rotate_requested.emit(-1 if up else 1)
+					else:
+						zoom_at(mb.position, pow(1.12, mb.factor if mb.factor > 0 else 1.0) if up else 1.0 / pow(1.12, mb.factor if mb.factor > 0 else 1.0))
 		accept_event()
+
+
+## WASD moves the view while no overlay is open.
+func _key_pan(dt: float) -> void:
+	if game.overlay != null and game.overlay.visible:
+		return
+	var d := Vector2(
+		int(Input.is_physical_key_pressed(KEY_D)) - int(Input.is_physical_key_pressed(KEY_A)),
+		int(Input.is_physical_key_pressed(KEY_S)) - int(Input.is_physical_key_pressed(KEY_W)))
+	if d != Vector2.ZERO:
+		pan_by(-d.normalized() * KEY_PAN_SPEED * dt)

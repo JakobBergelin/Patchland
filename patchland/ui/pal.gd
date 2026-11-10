@@ -4,12 +4,12 @@ class_name Pal
 static var bg := Color("#dce4e0")
 static var bg2 := Color("#eef2ef")
 static var ink := Color("#1e2c29")
-static var soft := Color("#56645f")
+static var soft := Color("#3d4945")
 static var panel := Color("#f6f8f6")
-static var line := Color(30 / 255.0, 44 / 255.0, 41 / 255.0, 0.14)
+static var line := Color(30 / 255.0, 44 / 255.0, 41 / 255.0, 0.24)
 static var chips := Color("#2d6c9a")
 static var mult := Color("#a3312b")
-static var slot := Color(30 / 255.0, 44 / 255.0, 41 / 255.0, 0.38)
+static var slot := Color(30 / 255.0, 44 / 255.0, 41 / 255.0, 0.62)
 static var gold := Color("#c99412")
 static var font: Font
 static var bold: Font
@@ -17,15 +17,15 @@ static var bold: Font
 
 static func init() -> void:
 	if DisplayServer.is_dark_mode():
-		bg = Color("#18211f")
+		bg = Color("#141b19")
 		bg2 = Color("#23312d")
-		ink = Color("#e4ebe8")
-		soft = Color("#9aa9a4")
+		ink = Color("#f2f7f5")
+		soft = Color("#bdcbc6")
 		panel = Color("#212c29")
-		line = Color(228 / 255.0, 235 / 255.0, 232 / 255.0, 0.13)
+		line = Color(228 / 255.0, 235 / 255.0, 232 / 255.0, 0.24)
 		chips = Color("#4f93c6")
 		mult = Color("#c9473f")
-		slot = Color(228 / 255.0, 235 / 255.0, 232 / 255.0, 0.38)
+		slot = Color(228 / 255.0, 235 / 255.0, 232 / 255.0, 0.66)
 		gold = Color("#e9b938")
 	# System fonts only (no font files shipped yet). Bricolage Grotesque is used if installed.
 	var names := PackedStringArray(["Bricolage Grotesque", "Segoe UI", "Helvetica Neue", "Arial", "sans-serif"])
