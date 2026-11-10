@@ -106,6 +106,40 @@ func _run() -> void:
 	_mouse(_cand_screen())
 	await _wait(10)
 	await _shot("05_board")
+	# camera: scroll to zoom toward a tile, middle-drag to pan, then reset
+	var z0: float = game.board.cam.size
+	var zp := _cand_screen()
+	for k in 4:
+		var wh := InputEventMouseButton.new()
+		wh.button_index = MOUSE_BUTTON_WHEEL_UP
+		wh.pressed = true
+		wh.factor = 1.0
+		wh.position = zp
+		wh.global_position = zp
+		root.push_input(wh)
+		await _wait(1)
+	_mouse(zp, MOUSE_BUTTON_MIDDLE, true)
+	var mm := InputEventMouseMotion.new()
+	mm.position = zp + Vector2(-120, 40)
+	mm.global_position = mm.position
+	mm.relative = Vector2(-120, 40)
+	mm.button_mask = MOUSE_BUTTON_MASK_MIDDLE
+	root.push_input(mm)
+	_mouse(zp + Vector2(-120, 40), MOUSE_BUTTON_MIDDLE, false)
+	await _wait(10)
+	print("zoom: cam size %.1f -> %.1f, user_zoom %.2f, pan %s" % [z0, game.board.cam.size, game.board.user_zoom, game.board.user_pan])
+	await _shot("05b_zoomed")
+	game.board.reset_view()
+	await _wait(60)
+	print("reset: cam size %.1f" % game.board.cam.size)
+	# fullscreen on and back off (restores the saved setting)
+	var was_fs: bool = game.is_fullscreen()
+	game.toggle_fullscreen()
+	await _wait(45)
+	print("fullscreen: %s, window %s" % [game.is_fullscreen(), DisplayServer.window_get_size()])
+	await _shot("05c_fullscreen")
+	game.set_fullscreen(was_fs)
+	await _wait(20)
 	# finish the round, then capture the harvest and whatever overlay follows
 	game.S.round_score += 100000  # make sure the goal is reached so the draft shows
 	while game.S.tiles_left > 0:

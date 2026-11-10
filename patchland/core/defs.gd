@@ -17,6 +17,9 @@ const FEAT := {
 	"rail": {"name": "Railroad", "chips": 8, "top": "#9a7b5c", "dark": "#5b4636"},
 }
 const FKEYS := ["river", "rail"]
+## Bonus for closing a line (no open ends, both ends finished), as a share of the
+## round goal per tile in the line (counted up to 10 tiles).
+const CLOSE_BONUS := {"river": 0.012, "rail": 0.015}
 const FEATURE_CHANCE := 0.3  # of non-special tiles
 const RIVER_SHARE := 0.55
 const TWEIGHT := [["forest", 28], ["field", 24], ["meadow", 20], ["water", 14], ["village", 14]]
@@ -61,7 +64,7 @@ const BOSSES := [
 
 const BOSS_ROUNDS := [2, 5, 7]
 const ROUNDS := 8
-const GOALS := [1500, 5000, 12000, 35000, 75000, 110000, 240000, 420000]
+const GOALS := [600, 4000, 10000, 34000, 78000, 140000, 360000, 480000]
 
 
 static func relic(id: String) -> Dictionary:

@@ -192,12 +192,12 @@ func draw(ci: CanvasItem, ws: Callable, size: float) -> void:
 		var yy: float = pos.y - (0.0 if reduced else k * f.rise)
 		var sc2: float = 1.6 - 0.6 * (k / 0.15) if f.stamp and not reduced and k < 0.15 else 1.0
 		var alpha: float = 1.0 if k < 0.7 else 1 - (k - 0.7) / 0.3
-		var fs := maxi(6, int(round((13 + size * 0.15) * f.scale * sc2)))
+		var fs := maxi(6, int(round((15 + size * 0.17) * f.scale * sc2)))
 		var w := 1200.0
 		var bgc := Pal.bg
 		bgc.a = alpha
 		var col := Pal.named(f.color)
 		col.a = alpha
 		var tp := Vector2(pos.x - w / 2, yy)
-		ci.draw_string_outline(font, tp, f.text, HORIZONTAL_ALIGNMENT_CENTER, w, fs, 8, bgc)
+		ci.draw_string_outline(font, tp, f.text, HORIZONTAL_ALIGNMENT_CENTER, w, fs, 11, bgc)
 		ci.draw_string(font, tp, f.text, HORIZONTAL_ALIGNMENT_CENTER, w, fs, col)

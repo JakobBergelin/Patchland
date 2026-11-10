@@ -151,13 +151,15 @@ static func region_size(s: RunState, start: Dictionary, t: String) -> int:
 
 
 ## The river or railroad network of feature `f` through `start`:
-## {tiles: Array, ends: int} where ends counts stations (rail) or places where
-## the river runs into water (river).
+## {tiles, ends, open, f}: ends counts stations (rail) or places where the river
+## runs into water; open counts feature edges still facing an empty spot.
+## A line is closed when open == 0 and ends >= 2.
 static func line_network(s: RunState, start: Dictionary, f: String) -> Dictionary:
 	var seen := {start.k: true}
 	var stack: Array = [start]
 	var tiles: Array = []
 	var ends := 0
+	var open := 0
 	while not stack.is_empty():
 		var e: Dictionary = stack.pop_back()
 		tiles.append(e)
@@ -169,6 +171,7 @@ static func line_network(s: RunState, start: Dictionary, f: String) -> Dictionar
 			var nk: Vector2i = e.k + Hex.DIRS[i]
 			var n = s.board.get(nk)
 			if n == null:
+				open += 1
 				continue
 			if f == "river" and n.tile.feat_at((i + 3) % 6) == "" and n.tile.edge((i + 3) % 6) == "water":
 				ends += 1  # flows into water
@@ -177,7 +180,14 @@ static func line_network(s: RunState, start: Dictionary, f: String) -> Dictionar
 				continue
 			seen[nk] = true
 			stack.append(n)
-	return {"tiles": tiles, "ends": ends, "f": f}
+	return {"tiles": tiles, "ends": ends, "open": open, "f": f}
+
+
+## Points for closing a line: a share of the round goal per tile, so the reward
+## stays meaningful in every round (Defs.CLOSE_BONUS).
+static func close_bonus(s: RunState, net: Dictionary) -> int:
+	var pct: float = Defs.CLOSE_BONUS[net.f]
+	return int(ceil(s.goal() * pct * mini(net.tiles.size(), 10) / 10.0)) * 10
 
 
 static func harvest_calc(s: RunState) -> Dictionary:

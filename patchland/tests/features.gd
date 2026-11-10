@@ -108,6 +108,26 @@ func _run() -> void:
 	check(region_of(Rules.harvest_calc(s), "rail") == null, "a railroad without two stations does not score")
 	build(s)
 
+	# --- closing a line pays a bonus ---
+	var wet := mk(["field", "water", "meadow", "forest", "meadow", "field"])
+	s.board[Vector2i(-1, 2)] = RunState.make_entry(-1, 2, wet)
+	var closed_r := s.closed_lines(s.board[Vector2i(-1, 2)])
+	check(closed_r.size() == 1 and closed_r[0].f == "river", "a water tile that catches the open river end closes it")
+	var rb := Rules.close_bonus(s, closed_r[0]) if closed_r.size() == 1 else 0
+	check(rb > 0, "closing a river pays a bonus (+%d at goal %d)" % [rb, s.goal()])
+	var score0 := s.round_score
+	var fev := Rules.evaluate(s, -1, 2, wet)
+	var fres := s.finish_placement(s.board[Vector2i(-1, 2)], fev)
+	check(fres.lines.size() == 1 and s.round_score == score0 + fev.total + rb, "finish_placement adds the bonus to the score")
+	check(s.closed_lines(s.board[Vector2i(-1, 2)]).size() == 1 and s.board[Vector2i(0, 1)] != null, "(still closed afterwards)")
+	var stn := mk(["meadow", "field", "village", "meadow", "forest", "forest"], {2: "rail"})
+	s.board[Vector2i(1, 1)] = RunState.make_entry(1, 1, stn)
+	var closed_t := s.closed_lines(s.board[Vector2i(1, 1)])
+	check(closed_t.size() == 1 and closed_t[0].f == "rail" and closed_t[0].ends == 3, "a third station closes the railroad")
+	build(s)
+	var half := s.closed_lines(s.board[Vector2i(0, 1)])
+	check(half.is_empty(), "an open line pays nothing yet")
+
 	# --- never stuck ---
 	var hog := mk(["meadow", "meadow", "meadow", "meadow", "meadow", "meadow"], {0: "rail", 1: "rail", 2: "rail", 3: "rail", 4: "rail", 5: "rail"})
 	s.cur = hog

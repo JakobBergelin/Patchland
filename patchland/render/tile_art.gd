@@ -432,7 +432,7 @@ static func draw_tile(ci: CanvasItem, tile: Tile) -> void:
 				var w := s * 0.09
 				var line := _quad(p - Vector2(w, 0), p + Vector2(-w / 2, -w * 0.6), p, 6)
 				line.append_array(_quad(p, p + Vector2(w / 2, w * 0.6), p + Vector2(w, 0), 6))
-				_clipped_polyline(ci, line, tri, Color(1, 1, 1, 0.5), 1.1)
+				_clipped_polyline(ci, line, tri, Color(1, 1, 1, 0.7), 1.3)
 		elif t == "meadow":
 			var n := 5 + int(R.randf() * 4)
 			var flowers := [Color("#ffffff"), Color("#f3d55b"), Color("#e993b5"), Color("#c8a7ec")]
@@ -467,10 +467,10 @@ static func draw_tile(ci: CanvasItem, tile: Tile) -> void:
 				deco.append({"y": p.y, "k": "house", "p": p, "sz": sz, "flip": flip})
 
 	draw_feature(ci, tile, flines, s)
-	stroke_hex(ci, C, s, Color(0, 0, 0, 0.14), 1.0)
+	stroke_hex(ci, C, s, Color(0, 0, 0, 0.38), 1.4)
 	for i in [1, 2, 3]:
 		var pp: Array = wc.call(i)
-		ci.draw_line(pp[0], pp[1], Color(1, 1, 1, 0.25), 1.4, true)
+		ci.draw_line(pp[0], pp[1], Color(1, 1, 1, 0.4), 1.6, true)
 	if tile.gold:
 		stroke_hex(ci, C, s - 1.4, Color("#f5c542"), 2.8)
 		stroke_hex(ci, C, s - 3.8, Color(1, 0.94, 0.706, 0.6), 1.0)
