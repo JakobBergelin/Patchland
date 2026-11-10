@@ -596,7 +596,7 @@ func round_banner() -> void:
 		var b := Defs.boss(S.boss)
 		show_banner("Boss: " + b.name, b.desc, true)
 		sfx.boss()
-		board.shake(5)
+		board.shake(3)
 	else:
 		show_banner("Round %d" % (S.round_idx + 1), "Goal " + Defs.fmt(S.goal()))
 
@@ -610,7 +610,7 @@ func place() -> void:
 	var r: int = sel.r
 	if not Rules.can_place(S, q, r, S.cur):
 		sfx.dud()
-		board.shake(3)
+		board.shake(1.5)
 		toast("That would cut a river or railroad. Rotate it or try another spot.")
 		return
 	var res := S.place(q, r)
@@ -633,7 +633,7 @@ func place() -> void:
 	after(170, func():
 		board.fx.dust(wx, wy)
 		sfx.land()
-		board.shake(2.5))
+		board.shake(1.0))
 
 	var t := 250.0
 	var run := {"chips": 0, "mult": 0}
@@ -728,15 +728,15 @@ func place() -> void:
 					board.fx.float_at(wx, wy - 0.35, "Perfect ×%d" % m[1], "mult", 1.35, true, 950)
 					board.fx.perfect_fx(wx, wy, tile)
 					sfx.perfect(S.streak)
-					board.shake(6)
-					board.punch_it(0.035)
+					board.shake(2.5)
+					board.punch_it(0.012)
 					board.bump(entry.k)
 				else:
 					board.fx.float_at(wx, wy - 0.35, "Golden ×%d" % m[1], "gold", 1.35, true, 950)
 					board.fx.gold_fx(wx, wy)
 					sfx.gold()
-					board.shake(4)
-					board.punch_it(0.02))
+					board.shake(2)
+					board.punch_it(0.008))
 			t += 280
 	after(t, func(): finish_placement(entry, ev))
 
@@ -752,7 +752,7 @@ func finish_placement(entry: Dictionary, ev: Dictionary) -> void:
 	if ev.total > 0:
 		board.fx.float_at(w.x, w.y - 1.1, "+" + Defs.fmt(ev.total), "mult" if ev.perfect else "ink", 1.3, true, 1200)
 		sfx.total(ev.total / g)
-		board.shake(minf(12, 1.5 + 40 * ev.total / g))
+		board.shake(minf(4, 0.8 + 3 * ev.total / g))
 	else:
 		board.fx.float_at(w.x, w.y - 1.1, "+0", "soft", 1)
 		sfx.dud()
@@ -778,7 +778,7 @@ func finish_placement(entry: Dictionary, ev: Dictionary) -> void:
 			board.fx.burst(xp.x, xp.y - 0.3, 8, [Defs.top(net.f), Color.WHITE], {"speed": 2.2, "up": 1.8, "grav": 5.0, "life": 0.8})
 		var verb := "River closed" if net.f == "river" else "Railroad closed"
 		board.fx.float_at(w.x, w.y - 2.3, "%s: +%s" % [verb, Defs.fmt(ln.bonus)], "gold", 1.15, true, 1600)
-		board.shake(5)
+		board.shake(2)
 		sfx.quest()
 	if S.tiles_left <= 0:
 		after(450, start_harvest)
@@ -849,7 +849,7 @@ func start_harvest() -> void:
 				pop(mult_panel)
 				board.fx.float_at(lp.x, lp.y - 1.2, ("%s ×%d, %d %s: +%d mult" % [Defs.name_of(r.t), r.n, r.ends, "stations" if r.t == "rail" else "water ends", r.mult]) if r.has("ends") else ("%s ×%d: +%d mult" % [Defs.name_of(r.t), r.n, r.mult]), "mult", 0.9, true, 1000)
 				sfx.mult(mini(10, r.mult))
-				board.shake(minf(6, 1 + r.mult)))
+				board.shake(minf(3, 0.5 + r.mult * 0.5)))
 		else:
 			step_q(maxf(30, gap), func(): pass)
 	step_q(0, func(): hl_region = null)
@@ -880,7 +880,7 @@ func start_harvest() -> void:
 				pop(mult_panel)
 				board.fx.float_at(sp.x, sp.y - 1.3, "%s +%d mult" % [Defs.SPECIALS[src.tile.special].name, add], "mult", 0.9, true, 1000)
 				sfx.mult(6)
-				board.shake(3))
+				board.shake(1.5))
 	step_q(700, func():
 		var total := int(round(float(acc.chips) * acc.mult))
 		S.apply_harvest(total)
@@ -891,20 +891,20 @@ func start_harvest() -> void:
 		board.fx.float_at(board.cam.x, board.cam.y - 0.5, "Harvest +" + Defs.fmt(total), "ink", 2, true, 1800, 20)
 		board.fx.clear_fx(board.view_rect(), 0.5)
 		sfx.big(total / g)
-		board.shake(minf(16, 5 + 10 * total / g))
-		board.punch_it(0.05))
+		board.shake(minf(8, 3 + 4 * total / g))
+		board.punch_it(0.025))
 	step_q(1300, func():
 		harvesting = false
 		_step_speed = 1
 		if S.cleared():
 			board.fx.clear_fx(board.view_rect(), 1)
 			sfx.clear()
-			board.shake(8)
+			board.shake(4)
 			show_banner("Goal reached", "%s of %s" % [Defs.fmt(S.round_score), Defs.fmt(S.goal())])
 			after(1400, end_round)
 		else:
 			sfx.fail()
-			board.shake(10)
+			board.shake(5)
 			show_banner("The harvest came up short", "%s of %s" % [Defs.fmt(S.round_score), Defs.fmt(S.goal())], true)
 			after(1600, game_over)
 		update_all())
