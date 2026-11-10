@@ -23,7 +23,7 @@ Patchland is a hex tile-placement roguelite: Dorfromantik's edge matching plus B
 - Special tiles (~10%): windmill (3 rays, length 3), lighthouse (1 ray to the edge of the land, rotates), bell tower (6 neighbors). Each hit adds the hit tile's matched-edge chips; hitting another special fires it; each firing special adds +1 mult.
 - Quests (~17% of tiles): link N tiles of a terrain via matching edges → +2 tiles and bonus points.
 - Round: 12 tiles, then the harvest scores every region of 2+ linked tiles (chips per tile × size, +1 mult per 3 tiles) and fires all specials. Placement points + harvest must reach the goal.
-- 8 rounds, goals `[600, 4000, 10000, 34000, 78000, 140000, 360000, 480000]` (rebalanced in Godot, see Balance below; the reference used `[1500, 5000, 12000, 35000, 75000, 110000, 240000, 420000]`). Bosses on rounds 3, 6 and 8; beating one gives two relic picks.
+- 8 rounds, goals `[600, 4000, 10000, 34000, 78000, 130000, 340000, 480000]` (rebalanced in Godot, see Balance below; the reference used `[1500, 5000, 12000, 35000, 75000, 110000, 240000, 420000]`). Bosses on rounds 3, 6 and 8; beating one gives two relic picks.
 - 20 relics, listed in the reference's `RELICS` array.
 
 ### Rivers and railroads (Godot-only, not in the reference)
@@ -33,6 +33,7 @@ Patchland is a hex tile-placement roguelite: Dorfromantik's edge matching plus B
 - **Railroads start and end in cities:** a station is a rail tile with exactly one rail edge, leaving from a village edge. Track pieces (2-3 rail edges) are only dealt while a railroad on the board has an open end; otherwise railroads come as stations. Rivers have no start tile: river pieces are dealt while a river end or a water edge is open, otherwise no river is dealt.
 - **Harvest:** a railroad network scores only between 2+ stations; a river network only once it reaches water at 2+ ends. Then: feature chips per tile, +1 mult per 3 tiles, +1 mult per end.
 - **Closing a line** (no open ends, finished at both ends) pays an immediate bonus: `Defs.CLOSE_BONUS` (river 1.2%, rail 1.5%) of the round goal per tile, up to 10 tiles (`Rules.close_bonus`, `RunState.closed_lines`). A water tile that catches an open river end closes it too.
+- **Closing a biome area** (a region of one land type, linked by matching edges, with no edge of that land facing an empty spot; bordered by matching or other land) pays an immediate bonus that grows faster than its size: `goal * REGION_BONUS * n * (1 + n / REGION_GROWTH)` for n tiles (min 3, capped at 16; `Rules.region_bonus`, `RunState.closed_regions`). Covering a region's last open edge with any land closes it. `RunState.closing_bonus` sums line and area bonuses for the preview hint and the bots.
 
 ## Port order
 1. Core rules + headless bot simulation matching the reference's results.
@@ -66,7 +67,7 @@ Rivers/railroads rule checks: `godot --headless --path . -s res://tests/features
 Visual smoke test (needs a window, not `--headless`): `godot --path . -s res://tests/screenshot.gd -- <output folder>` plays the opening, right-clicks to rotate (prints the rotation change), zooms and pans the camera, toggles fullscreen on and back, finishes round 1 and saves PNGs of each stage.
 
 ### Balance
-Goals are set from bot runs. `GODOT=<console exe> tests/balance.sh [procs] [runs_per_proc]` runs `run_sim.gd --nofail` in parallel for the `greedy` bot (every slot and rotation, plus harvest look-ahead: an expert) and the `casual` bot (half the slots, 3 rotations: a person scanning the board), and prints per-round p25/median/p75 next to the goals. Targets used for the current goals: casual clears rounds 1-4 about 80-90% of the time and rounds 7-8 about 40-55%; greedy clears every early round and rounds 7-8 about 70-80%. Whole runs (stopping at a miss): greedy won 17 of 24, casual 7 of 24. Re-run after any scoring change.
+Goals are set from bot runs. `GODOT=<console exe> tests/balance.sh [procs] [runs_per_proc]` runs `run_sim.gd --nofail` in parallel for the `greedy` bot (every slot and rotation, plus harvest look-ahead: an expert) and the `casual` bot (half the slots, 3 rotations: a person scanning the board), and prints per-round p25/median/p75 next to the goals. Targets used for the current goals: casual clears rounds 1-4 about 80-90% of the time and rounds 7-8 about 40-55%; greedy clears every early round and rounds 7-8 about 70-80%. Whole runs (stopping at a miss), with closing bonuses counted by both bots: greedy won 16 of 24, casual 9 of 24. Re-run after any scoring change.
 
 ## Backlog (not yet built)
 Closing regions that bloom and cascade into neighbors; ripple scoring through neighbors that become perfect; tile transformations (water surrounded by fields becomes farmland, villages merge into towns); relics that fire in a player-chosen order; retriggers; relics that scale up over a run.

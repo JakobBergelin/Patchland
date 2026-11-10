@@ -100,11 +100,13 @@ func best_move(s: RunState, bot: String) -> Dictionary:
 				continue
 			var ev := Rules.evaluate(s, c.q, c.r, s.cur)
 			var score: int = ev.total
+			# every bot counts closing bonuses (the preview shows them to players)
+			var k: Vector2i = c.k
+			s.board[k] = RunState.make_entry(c.q, c.r, s.cur)
+			score += s.closing_bonus(s.board[k])
 			if bot == "greedy":
-				var k: Vector2i = c.k
-				s.board[k] = RunState.make_entry(c.q, c.r, s.cur)
 				score += Rules.harvest_calc(s).total - s.harvest_base
-				s.board.erase(k)
+			s.board.erase(k)
 			if score > best.score:
 				best = {"score": score, "q": c.q, "r": c.r, "rot": rot}
 	s.cur.rot = base_rot

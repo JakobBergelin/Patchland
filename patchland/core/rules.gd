@@ -183,6 +183,40 @@ static func line_network(s: RunState, start: Dictionary, f: String) -> Dictionar
 	return {"tiles": tiles, "ends": ends, "open": open, "f": f}
 
 
+## The biome region of terrain `t` through `start` (tiles linked by matching
+## t edges): {tiles, open, t} where open counts t edges facing an empty spot.
+## A region is closed when open == 0.
+static func terrain_region(s: RunState, start: Dictionary, t: String) -> Dictionary:
+	var seen := {start.k: true}
+	var stack: Array = [start]
+	var tiles: Array = []
+	var open := 0
+	while not stack.is_empty():
+		var e: Dictionary = stack.pop_back()
+		tiles.append(e)
+		for i in 6:
+			if e.tile.edge(i) != t:
+				continue
+			var nk: Vector2i = e.k + Hex.DIRS[i]
+			var n = s.board.get(nk)
+			if n == null:
+				open += 1
+				continue
+			if seen.has(nk) or n.tile.edge((i + 3) % 6) != t:
+				continue
+			seen[nk] = true
+			stack.append(n)
+	return {"tiles": tiles, "open": open, "t": t}
+
+
+## Points for closing a biome region of n tiles (see Defs.REGION_BONUS).
+static func region_bonus(s: RunState, n: int) -> int:
+	if n < Defs.REGION_MIN:
+		return 0
+	var m := mini(n, Defs.REGION_CAP)
+	return int(ceil(s.goal() * Defs.REGION_BONUS * m * (1.0 + m / Defs.REGION_GROWTH) / 10.0)) * 10
+
+
 ## Points for closing a line: a share of the round goal per tile, so the reward
 ## stays meaningful in every round (Defs.CLOSE_BONUS).
 static func close_bonus(s: RunState, net: Dictionary) -> int:
