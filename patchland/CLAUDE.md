@@ -45,7 +45,7 @@ Patchland is a hex tile-placement roguelite: Dorfromantik's edge matching plus B
 ## Controls
 Hover a dashed slot to preview, left click places. **Right click rotates the tile clockwise** (shift + right click: counter-clockwise), on the board or on the tray tile. Ctrl + scroll, R/E/Q, the Rotate button and clicking (or scrolling on) the tray tile also rotate. X redraws, arrows cycle slots, Enter/Space places, M mutes. Clicking during the harvest speeds it up.
 
-Camera: scroll zooms toward the cursor (0.45x to 4x of the auto-fit), left-drag (past 10 px) or middle-drag pans, WASD pans, +/- zoom, F / Home or double-clicking empty ground resets to the auto-fit view. Trackpad pinch and two-finger pan work too. The player view is stored as `Board.user_zoom` / `user_pan` on top of the auto-fit, so it keeps following the board as it grows.
+Camera: scroll zooms toward the cursor (0.45x to 4x of the auto-fit), left-drag (past 10 px) or middle-drag pans, WASD pans, +/- zoom, F / Home or double-clicking empty ground resets to the auto-fit view. Trackpad pinch and two-finger pan work too. The player view is stored as `Board.user_zoom` / `user_pan` on top of the auto-fit, so it keeps following the board as it grows. The automatic view is sticky (`Board._fit`): it only zooms out when the board would no longer fit and only moves as far as needed to keep everything on screen, so the camera stays calm while placing. Screen shake is capped at 8 px and placement shake stays small (big shakes are for the harvest and round end).
 
 Fullscreen: F11, Alt+Enter or the HUD button; the choice is saved in `user://patchland.cfg`. The board spans the whole window while the HUD, relic strip and tray stay `Game.CONTENT_W` wide.
 

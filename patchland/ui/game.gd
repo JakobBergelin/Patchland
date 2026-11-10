@@ -3,7 +3,9 @@ extends Control
 ## Main controller: builds the UI, owns the RunState, runs placement and harvest
 ## sequences (timed callbacks), and handles input.
 
-const SETTINGS_PATH := "user://patchland.cfg"
+## Where settings and the best score are saved. Tests point this at their own file
+## (set before adding the node) so they never touch the player's settings.
+var settings_path := "user://patchland.cfg"
 const SHEET_W := 430.0
 
 var S: RunState
@@ -93,7 +95,7 @@ func _ready() -> void:
 
 func _load_settings() -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(SETTINGS_PATH) == OK:
+	if cfg.load(settings_path) == OK:
 		muted = cfg.get_value("game", "muted", false)
 		if cfg.get_value("game", "fullscreen", false) and DisplayServer.get_name() != "headless":
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
@@ -101,14 +103,14 @@ func _load_settings() -> void:
 
 func _save_setting(key: String, value) -> void:
 	var cfg := ConfigFile.new()
-	cfg.load(SETTINGS_PATH)
+	cfg.load(settings_path)
 	cfg.set_value("game", key, value)
-	cfg.save(SETTINGS_PATH)
+	cfg.save(settings_path)
 
 
 func get_best() -> int:
 	var cfg := ConfigFile.new()
-	if cfg.load(SETTINGS_PATH) == OK:
+	if cfg.load(settings_path) == OK:
 		return cfg.get_value("game", "best", 0)
 	return 0
 
@@ -444,7 +446,13 @@ func _build_ui() -> void:
 	calc.add_child(streak_panel)
 	hint_lbl = _lbl("", 15, Pal.soft)
 	hint_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint_lbl.custom_minimum_size = Vector2(120, 40)
+	# fixed three-line height: the hint changes with every hovered slot, and a
+	# changing height would resize the board above it and make the camera jump
+	hint_lbl.custom_minimum_size = Vector2(120, ceilf(3 * Pal.font.get_height(15) + 3 * hint_lbl.get_theme_constant("line_spacing")) + 2)
+	hint_lbl.max_lines_visible = 3
+	hint_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	hint_lbl.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	hint_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	readout.add_child(hint_lbl)
 
 	var actions := HBoxContainer.new()
@@ -596,7 +604,7 @@ func round_banner() -> void:
 		var b := Defs.boss(S.boss)
 		show_banner("Boss: " + b.name, b.desc, true)
 		sfx.boss()
-		board.shake(5)
+		board.shake(3)
 	else:
 		show_banner("Round %d" % (S.round_idx + 1), "Goal " + Defs.fmt(S.goal()))
 
@@ -610,7 +618,7 @@ func place() -> void:
 	var r: int = sel.r
 	if not Rules.can_place(S, q, r, S.cur):
 		sfx.dud()
-		board.shake(3)
+		board.shake(1.5)
 		toast("That would cut a river or railroad. Rotate it or try another spot.")
 		return
 	var res := S.place(q, r)
@@ -633,7 +641,7 @@ func place() -> void:
 	after(170, func():
 		board.fx.dust(wx, wy)
 		sfx.land()
-		board.shake(2.5))
+		board.shake(1.0))
 
 	var t := 250.0
 	var run := {"chips": 0, "mult": 0}
@@ -728,15 +736,15 @@ func place() -> void:
 					board.fx.float_at(wx, wy - 0.35, "Perfect ×%d" % m[1], "mult", 1.35, true, 950)
 					board.fx.perfect_fx(wx, wy, tile)
 					sfx.perfect(S.streak)
-					board.shake(6)
-					board.punch_it(0.035)
+					board.shake(2.5)
+					board.punch_it(0.012)
 					board.bump(entry.k)
 				else:
 					board.fx.float_at(wx, wy - 0.35, "Golden ×%d" % m[1], "gold", 1.35, true, 950)
 					board.fx.gold_fx(wx, wy)
 					sfx.gold()
-					board.shake(4)
-					board.punch_it(0.02))
+					board.shake(2)
+					board.punch_it(0.008))
 			t += 280
 	after(t, func(): finish_placement(entry, ev))
 
@@ -752,7 +760,7 @@ func finish_placement(entry: Dictionary, ev: Dictionary) -> void:
 	if ev.total > 0:
 		board.fx.float_at(w.x, w.y - 1.1, "+" + Defs.fmt(ev.total), "mult" if ev.perfect else "ink", 1.3, true, 1200)
 		sfx.total(ev.total / g)
-		board.shake(minf(12, 1.5 + 40 * ev.total / g))
+		board.shake(minf(4, 0.8 + 3 * ev.total / g))
 	else:
 		board.fx.float_at(w.x, w.y - 1.1, "+0", "soft", 1)
 		sfx.dud()
@@ -778,7 +786,7 @@ func finish_placement(entry: Dictionary, ev: Dictionary) -> void:
 			board.fx.burst(xp.x, xp.y - 0.3, 8, [Defs.top(net.f), Color.WHITE], {"speed": 2.2, "up": 1.8, "grav": 5.0, "life": 0.8})
 		var verb := "River closed" if net.f == "river" else "Railroad closed"
 		board.fx.float_at(w.x, w.y - 2.3, "%s: +%s" % [verb, Defs.fmt(ln.bonus)], "gold", 1.15, true, 1600)
-		board.shake(5)
+		board.shake(2)
 		sfx.quest()
 	if S.tiles_left <= 0:
 		after(450, start_harvest)
@@ -849,7 +857,7 @@ func start_harvest() -> void:
 				pop(mult_panel)
 				board.fx.float_at(lp.x, lp.y - 1.2, ("%s ×%d, %d %s: +%d mult" % [Defs.name_of(r.t), r.n, r.ends, "stations" if r.t == "rail" else "water ends", r.mult]) if r.has("ends") else ("%s ×%d: +%d mult" % [Defs.name_of(r.t), r.n, r.mult]), "mult", 0.9, true, 1000)
 				sfx.mult(mini(10, r.mult))
-				board.shake(minf(6, 1 + r.mult)))
+				board.shake(minf(3, 0.5 + r.mult * 0.5)))
 		else:
 			step_q(maxf(30, gap), func(): pass)
 	step_q(0, func(): hl_region = null)
@@ -880,7 +888,7 @@ func start_harvest() -> void:
 				pop(mult_panel)
 				board.fx.float_at(sp.x, sp.y - 1.3, "%s +%d mult" % [Defs.SPECIALS[src.tile.special].name, add], "mult", 0.9, true, 1000)
 				sfx.mult(6)
-				board.shake(3))
+				board.shake(1.5))
 	step_q(700, func():
 		var total := int(round(float(acc.chips) * acc.mult))
 		S.apply_harvest(total)
@@ -891,20 +899,20 @@ func start_harvest() -> void:
 		board.fx.float_at(board.cam.x, board.cam.y - 0.5, "Harvest +" + Defs.fmt(total), "ink", 2, true, 1800, 20)
 		board.fx.clear_fx(board.view_rect(), 0.5)
 		sfx.big(total / g)
-		board.shake(minf(16, 5 + 10 * total / g))
-		board.punch_it(0.05))
+		board.shake(minf(8, 3 + 4 * total / g))
+		board.punch_it(0.025))
 	step_q(1300, func():
 		harvesting = false
 		_step_speed = 1
 		if S.cleared():
 			board.fx.clear_fx(board.view_rect(), 1)
 			sfx.clear()
-			board.shake(8)
+			board.shake(4)
 			show_banner("Goal reached", "%s of %s" % [Defs.fmt(S.round_score), Defs.fmt(S.goal())])
 			after(1400, end_round)
 		else:
 			sfx.fail()
-			board.shake(10)
+			board.shake(5)
 			show_banner("The harvest came up short", "%s of %s" % [Defs.fmt(S.round_score), Defs.fmt(S.goal())], true)
 			after(1600, game_over)
 		update_all())
@@ -1148,7 +1156,7 @@ func update_calc() -> void:
 	streak_panel.visible = S.streak >= 2
 	streak_lbl.text = "Streak %d" % S.streak
 	if S.busy:
-		hint_lbl.text = "Harvesting. Click the board to speed it up." if harvesting else "Scoring…"
+		_set_hint("Harvesting. Click the board to speed it up." if harvesting else "Scoring…")
 		return
 	if cur_eval == null:
 		_set_calc_idle(true)
@@ -1156,12 +1164,12 @@ func update_calc() -> void:
 			show_calc(calc_hold.chips, calc_hold.mult, calc_hold.total)
 		else:
 			show_calc(0, 0, 0)
-		hint_lbl.text = tile_hint(S.cur) + "Hover a dashed spot, or use the arrow keys, to preview your tile. Right-click to rotate. Scroll to zoom, drag or WASD to move the view, F to see the whole board."
+		_set_hint(tile_hint(S.cur) + "Hover a dashed spot, or use the arrow keys, to preview your tile. Right-click to rotate. Scroll to zoom, drag or WASD to move the view, F to see the whole board.")
 		return
 	if not cur_eval.blocked.is_empty():
 		_set_calc_idle(true)
 		show_calc(0, 0, 0)
-		hint_lbl.text = "Blocked: this would cut a river or railroad. Every river and track edge must meet the same on the other side. Rotate it or try another spot."
+		_set_hint("Blocked: this would cut a river or railroad. Every river and track edge must meet the same on the other side. Rotate it or try another spot.")
 		return
 	_set_calc_idle(false)
 	show_calc(cur_eval.chips, cur_eval.mult, cur_eval.total)
@@ -1196,7 +1204,13 @@ func update_calc() -> void:
 	if dh > 0:
 		h += " Harvest +%s." % Defs.fmt(dh)
 	h += " Click to place, right-click to rotate."
-	hint_lbl.text = h
+	_set_hint(h)
+
+
+## Sets the hint; the full text is also its tooltip in case the three lines cut it short.
+func _set_hint(text: String) -> void:
+	hint_lbl.text = text
+	hint_lbl.tooltip_text = text
 
 
 func update_buttons() -> void:

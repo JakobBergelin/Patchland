@@ -68,6 +68,7 @@ func _cand_screen() -> Vector2:
 func _run() -> void:
 	var scene: PackedScene = load("res://main.tscn")
 	game = scene.instantiate()
+	game.settings_path = "user://test_settings.cfg"  # keep the player's settings and best score untouched
 	root.add_child(game)
 	await _wait(30)
 	await _shot("01_intro")
@@ -102,6 +103,10 @@ func _run() -> void:
 		await _wait(3)
 		_mouse(q, MOUSE_BUTTON_LEFT, true)
 		_mouse(q, MOUSE_BUTTON_LEFT, false)
+		await _wait(2)
+		if not game.S.busy:
+			# synthetic mouse input is dropped while the real cursor is outside the window
+			game._on_click(game.board.hit_test(q - game.board.global_position))
 	await _wait(160)
 	_mouse(_cand_screen())
 	await _wait(10)
@@ -136,7 +141,7 @@ func _run() -> void:
 	var was_fs: bool = game.is_fullscreen()
 	game.toggle_fullscreen()
 	await _wait(45)
-	print("fullscreen: %s, window %s" % [game.is_fullscreen(), DisplayServer.window_get_size()])
+	print("fullscreen: %s, window %s%s" % [game.is_fullscreen(), DisplayServer.window_get_size(), "" if game.is_fullscreen() else "  (the OS did not apply it; the window may not have focus)"])
 	await _shot("05c_fullscreen")
 	game.set_fullscreen(was_fs)
 	await _wait(20)
@@ -151,6 +156,10 @@ func _run() -> void:
 		await _wait(2)
 		_mouse(q, MOUSE_BUTTON_LEFT, true)
 		_mouse(q, MOUSE_BUTTON_LEFT, false)
+		await _wait(2)
+		if not game.S.busy:
+			# synthetic mouse input is dropped while the real cursor is outside the window
+			game._on_click(game.board.hit_test(q - game.board.global_position))
 	while not game.harvesting:
 		await _wait(5)
 	await _wait(150)

@@ -38,6 +38,7 @@ const KEY_PAN_SPEED := 700.0  # screen px per second for WASD
 ## Player camera on top of the auto-fit: zoom factor and pan offset in world units.
 var user_zoom := 1.0
 var user_pan := Vector2.ZERO
+var _auto := {}  # sticky automatic view, see _fit()
 
 
 func _ready() -> void:
@@ -111,7 +112,7 @@ func bump(k: Vector2i) -> void:
 
 func shake(px: float) -> void:
 	if not reduced:
-		shake_amp = minf(16, maxf(shake_amp, px))
+		shake_amp = minf(8, maxf(shake_amp, px))
 
 
 func punch_it(v: float) -> void:
@@ -137,13 +138,28 @@ func fit_view(points: Array, w: float, h: float, pad: float, max_s: float) -> Di
 		y0 = minf(y0, wp.y - 1 - TileArt.PADT)
 		y1 = maxf(y1, wp.y + 1 + TileArt.DEPTH + 0.1)
 	var s := maxf(8, minf(minf((w - 2 * pad) / (x1 - x0), (h - 2 * pad) / (y1 - y0)), max_s))
-	return {"size": s, "x": (x0 + x1) / 2, "y": (y0 + y1) / 2}
+	return {"size": s, "x": (x0 + x1) / 2, "y": (y0 + y1) / 2, "x0": x0, "x1": x1, "y0": y0, "y1": y1}
 
 
-## The auto-fit view (whole board plus slots) before the player's zoom/pan.
+## The automatic view (whole board plus slots) before the player's zoom/pan.
+## It is sticky so the camera stays calm while you play: it only zooms out when
+## the board would no longer fit (or back in when there's far more room, e.g. the
+## window grew), and it only moves as far as needed to keep everything on screen.
 func _fit() -> Dictionary:
 	var pts: Array = game.S.board.values() + game.S.cands.values()
-	return fit_view(pts, size.x, size.y, 14, 58)
+	var f := fit_view(pts, size.x, size.y, 14, 58)
+	if _auto.is_empty() or snap_cam:
+		_auto = {"size": f.size, "x": f.x, "y": f.y}
+		return _auto
+	if f.size < _auto.size - 0.01 or f.size > _auto.size * 1.35:
+		_auto.size = f.size
+	var pad: float = 14.0 / _auto.size
+	var half: Vector2 = size / _auto.size / 2.0 - Vector2(pad, pad)
+	var lo := Vector2(f.x1, f.y1) - half  # centre at least here, so the right/bottom edge shows
+	var hi := Vector2(f.x0, f.y0) + half  # and at most here, so the left/top edge shows
+	_auto.x = f.x if lo.x > hi.x else clampf(_auto.x, lo.x, hi.x)
+	_auto.y = f.y if lo.y > hi.y else clampf(_auto.y, lo.y, hi.y)
+	return _auto
 
 
 ## Where the camera is heading: the auto-fit view, scaled by the player's zoom and
@@ -272,7 +288,8 @@ func _process(dt: float) -> void:
 
 	var off := Vector2.ZERO
 	if shake_amp > 0:
-		off = Vector2((randf() - 0.5) * 2 * shake_amp, (randf() - 0.5) * 2 * shake_amp)
+		# smooth wobble (a few Hz) rather than a new random jump every frame
+		off = Vector2(sin(now / 17.0) + 0.5 * sin(now / 7.3), cos(now / 13.0) + 0.5 * cos(now / 5.9)) / 1.5 * shake_amp
 	var c := size / 2
 	var p := 1.0 + punch
 	shaker.position = off + c - c * p
