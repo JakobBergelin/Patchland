@@ -40,6 +40,7 @@ var mute_icon: IconView
 var relic_box: HBoxContainer
 var cur_view: TileView
 var nxt_view: TileView
+var nxt2_view: TileView
 var chips_panel: PanelContainer
 var mult_panel: PanelContainer
 var chips_lbl: Label
@@ -97,7 +98,7 @@ func _load_settings() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(settings_path) == OK:
 		muted = cfg.get_value("game", "muted", false)
-		if cfg.get_value("game", "fullscreen", false) and DisplayServer.get_name() != "headless":
+		if cfg.get_value("game", "fullscreen", false) and DisplayServer.get_name() != "headless" and not Engine.is_embedded_in_editor():
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 
 
@@ -141,6 +142,12 @@ func is_fullscreen() -> bool:
 
 
 func set_fullscreen(on: bool) -> void:
+	# A game embedded in the editor's Game tab can't change its window mode.
+	if Engine.is_embedded_in_editor():
+		toast("Fullscreen doesn't work inside the editor's Game tab. Turn off \"Embed Game on Next Play\" there and run again (F5), or run the exported game.")
+		return
+	# Windows ignores mode changes for a window without focus, so bring it forward first.
+	DisplayServer.window_move_to_foreground()
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if on else DisplayServer.WINDOW_MODE_WINDOWED)
 	_save_setting("fullscreen", on)
 	render_fullscreen()
@@ -410,6 +417,18 @@ func _build_ui() -> void:
 	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	nxt_box.add_child(nl)
 	hand.add_child(nxt_box)
+	# the tile after next: smaller and fainter, so the order reads left to right
+	var nxt2_box := VBoxContainer.new()
+	nxt2_box.add_theme_constant_override("separation", 2)
+	nxt2_box.size_flags_vertical = Control.SIZE_SHRINK_END
+	nxt2_view = TileView.new()
+	nxt2_view.custom_minimum_size = Vector2(36, 36)
+	nxt2_view.modulate.a = 0.6
+	nxt2_box.add_child(nxt2_view)
+	var nl2 := _lbl("Then", 12, Pal.soft)
+	nl2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nxt2_box.add_child(nl2)
+	hand.add_child(nxt2_box)
 
 	var readout := VBoxContainer.new()
 	readout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -420,6 +439,7 @@ func _build_ui() -> void:
 	calc.add_theme_constant_override("separation", 6)
 	readout.add_child(calc)
 	chips_panel = PanelContainer.new()
+	chips_panel.tooltip_text = "Yield: the points this placement earns before the multiplier"
 	chips_panel.add_theme_stylebox_override("panel", _sb(Pal.chips, 10, Color(0, 0, 0, 0), 0, Vector4(10, 2, 10, 2)))
 	chips_lbl = _lbl("0", 22, Color.WHITE, true)
 	chips_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -428,6 +448,7 @@ func _build_ui() -> void:
 	calc.add_child(chips_panel)
 	calc.add_child(_lbl("×", 18, Pal.soft))
 	mult_panel = PanelContainer.new()
+	mult_panel.tooltip_text = "Multiplier: the yield is multiplied by this"
 	mult_panel.add_theme_stylebox_override("panel", _sb(Pal.mult, 10, Color(0, 0, 0, 0), 0, Vector4(10, 2, 10, 2)))
 	mult_lbl = _lbl("0", 22, Color.WHITE, true)
 	mult_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -850,7 +871,7 @@ func start_harvest() -> void:
 			show_calc(acc.chips, acc.mult)
 			pop(mult_panel)
 			sfx.mult(0)
-			toast("Almanac +%d mult" % S.almanac))
+			toast("Almanac +%d multiplier" % S.almanac))
 	var regs: Array = H.regions.duplicate()
 	regs.sort_custom(func(a, b): return a.chips < b.chips or (a.chips == b.chips and a.n < b.n))
 	for r in regs:
@@ -877,7 +898,7 @@ func start_harvest() -> void:
 				acc.mult += r.mult
 				show_calc(acc.chips, acc.mult)
 				pop(mult_panel)
-				board.fx.float_at(lp.x, lp.y - 1.2, ("%s ×%d, %d %s: +%d mult" % [Defs.name_of(r.t), r.n, r.ends, "stations" if r.t == "rail" else "water ends", r.mult]) if r.has("ends") else ("%s ×%d: +%d mult" % [Defs.name_of(r.t), r.n, r.mult]), "mult", 0.9, true, 1000)
+				board.fx.float_at(lp.x, lp.y - 1.2, ("%s ×%d, %d %s: +%d multiplier" % [Defs.name_of(r.t), r.n, r.ends, "stations" if r.t == "rail" else "water ends", r.mult]) if r.has("ends") else ("%s ×%d: +%d multiplier" % [Defs.name_of(r.t), r.n, r.mult]), "mult", 0.9, true, 1000)
 				sfx.mult(mini(10, r.mult))
 				board.shake(minf(3, 0.5 + r.mult * 0.5)))
 		else:
@@ -908,7 +929,7 @@ func start_harvest() -> void:
 				acc.mult += add
 				show_calc(acc.chips, acc.mult)
 				pop(mult_panel)
-				board.fx.float_at(sp.x, sp.y - 1.3, "%s +%d mult" % [Defs.SPECIALS[src.tile.special].name, add], "mult", 0.9, true, 1000)
+				board.fx.float_at(sp.x, sp.y - 1.3, "%s +%d multiplier" % [Defs.SPECIALS[src.tile.special].name, add], "mult", 0.9, true, 1000)
 				sfx.mult(6)
 				board.shake(1.5))
 	step_q(700, func():
@@ -1167,15 +1188,15 @@ func tile_hint(t: Tile) -> String:
 	if t.special != "":
 		return out + "%s: %s Every tile hit scores its land again, and hitting another special sets it off. " % [Defs.SPECIALS[t.special].name, Defs.SPECIALS[t.special].desc]
 	if t.is_station():
-		out += "Station: railroads start and end in cities. A line between two stations scores in the harvest, +1 mult per station. "
+		out += "Station: railroads start and end in cities. A line between two stations scores in the harvest, +1 multiplier per station. "
 	elif t.feature() == "rail":
-		out += "Railroad: link track for +8 chips and +1 mult per edge. Track must meet track. "
+		out += "Railroad: link track for +8 yield and +1 multiplier per edge. Track must meet track. "
 	elif t.feature() == "river":
-		out += "River: flows out of and into water. Link it for +6 chips and +1 mult per edge; it can't be cut. A river that reaches water at both ends scores in the harvest. "
+		out += "River: flows out of and into water. Link it for +6 yield and +1 multiplier per edge; it can't be cut. A river that reaches water at both ends scores in the harvest. "
 	if t.has_quest():
 		return out + "Quest: link %d %s tiles through matching edges. " % [t.quest.need, Defs.TER[t.quest.t].name.to_lower()]
 	if t.gold:
-		return out + "Golden tile: its mult is doubled. "
+		return out + "Golden tile: its multiplier is doubled. "
 	return out
 
 
@@ -1210,13 +1231,13 @@ func update_calc() -> void:
 				var nm := Defs.name_of(cur_eval.feat_kind[i]).to_lower()
 				if not kinds.has(nm):
 					kinds.append(nm)
-		h += " Links %s: +%d chips, +%d mult." % [" and ".join(kinds), cur_eval.feat_sum, cur_eval.feat_matches]
+		h += " Links %s: +%d yield, +%d multiplier." % [" and ".join(kinds), cur_eval.feat_sum, cur_eval.feat_matches]
 	var hits := Rules.count_hits(cur_eval.events)
 	if hits:
-		h += " Rays hit %d tile%s for +%d chips." % [hits, "s" if hits > 1 else "", cur_eval.ray_chips]
+		h += " Rays hit %d tile%s for +%d yield." % [hits, "s" if hits > 1 else "", cur_eval.ray_chips]
 	var extras: Array[String] = []
 	if cur_eval.chip_add:
-		extras.append("Monoculture +%d chips" % cur_eval.chip_add)
+		extras.append("Monoculture +%d yield" % cur_eval.chip_add)
 	for a in cur_eval.adds:
 		extras.append("%s +%d" % [a[0], a[1]])
 	for m in cur_eval.muls:
@@ -1255,6 +1276,8 @@ func draw_previews() -> void:
 	cur_view.tile = S.cur
 	nxt_view.tile = S.nxt
 	nxt_view.fogged = S.boss == "fog"
+	nxt2_view.tile = S.nxt2
+	nxt2_view.fogged = S.boss == "fog"
 
 
 func toast(msg: String) -> void:
@@ -1435,8 +1458,8 @@ func show_intro() -> void:
 	cv.list = hero
 	cv.custom_minimum_size = Vector2(SHEET_W - 44, 150)
 	sheet_box.add_child(cv)
-	sheet_box.add_child(_para("Lay hex tiles to grow a patch of countryside. Every edge that matches the land beside it adds its chips and +1 mult, and matching every neighbor doubles the mult."))
-	sheet_box.add_child(_para("When your tiles run out, the harvest scores every region of linked land on the whole board, and bigger regions add more mult. Your placements plus the harvest must reach the goal."))
+	sheet_box.add_child(_para("Lay hex tiles to grow a patch of countryside. Every edge that matches the land beside it adds its yield and +1 multiplier, and matching every neighbor doubles the multiplier."))
+	sheet_box.add_child(_para("When your tiles run out, the harvest scores every region of linked land on the whole board, and bigger regions raise the multiplier. Your placements plus the harvest must reach the goal."))
 	sheet_box.add_child(_para("Windmills, lighthouses and bell towers fire rays that score every tile they hit, and a ray that hits another special tile sets it off too. Golden tiles, quest flags, perfect streaks and boss rounds (3, 6 and 8) add extra twists."))
 	sheet_box.add_child(_para("Rivers and railroads score extra when they link across an edge. Railroads run between stations in cities, rivers flow out of and into water, and you can never place a tile that cuts one. A line that runs end to end scores again in the harvest."))
 	var legend := HFlowContainer.new()

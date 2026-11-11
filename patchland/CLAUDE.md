@@ -1,6 +1,8 @@
 # Patchland (Godot port)
 
-Patchland is a hex tile-placement roguelite: Dorfromantik's edge matching plus Balatro's chips × mult scoring, relics and rising goals. This Godot 4 project is a port of a finished web prototype.
+Patchland is a hex tile-placement roguelite: lay tiles so their edges match the land beside them, score each placement as yield × multiplier, collect relics and beat rising goals. This Godot 4 project is a port of a finished web prototype.
+
+**Terminology:** players see **yield** (base points) and **multiplier**. The code still calls them `chips` and `mult` (e.g. `ev.chips`, `Pal.chips`, `FEAT[f].chips`); keep player-facing text on yield/multiplier. Don't name other games in code, text or docs.
 
 **Reference implementation:** `reference/patchland.html` (single file, plain JS + canvas). It is the source of truth for rules, numbers, drawing and feel. When in doubt, match it.
 
@@ -14,24 +16,24 @@ Patchland is a hex tile-placement roguelite: Dorfromantik's edge matching plus B
 - `render/` — `TileArt` bakes one texture per tile+rotation (port `renderTile`, trees, houses, hay, bushes, windmill/lighthouse/bell tower, pennants, sails); `Board` node draws tiles depth-sorted by y, ghost preview, match indicators, ray previews, region highlight.
 - `fx/` — particles, floating text, rings, beams, screen shake and zoom punch, tween-based drop/squash/hop.
 - `audio/` — synth helpers (tone with slide, filtered noise hit) and the `sfx` set from the reference.
-- `ui/` — HUD (round, score, goal bar with "on pace" segment, tiles left), relic strip, tray (current/next tile, chips × mult readout, hint), overlays (intro, relic draft, game over, win), banners, toasts.
+- `ui/` — HUD (round, score, goal bar with "on pace" segment, tiles left), relic strip, tray (current/next tile, yield × multiplier readout, hint), overlays (intro, relic draft, game over, win), banners, toasts.
 - `tests/` — headless scripts, including a greedy bot that plays full runs and prints per-round scores (used to set goals).
 
 ## Rules summary (see reference for exact numbers)
-- Terrain chips: village 8, water 6, field 5, forest 4, meadow 3.
-- Placement: each matching edge adds its chips and +1 mult (base mult 1). Perfect (2+ neighbors, all match) ×2 mult. Golden tiles ×2. Perfect streak adds +streak mult.
-- Special tiles (~10%): windmill (3 rays, length 3), lighthouse (1 ray to the edge of the land, rotates), bell tower (6 neighbors). Each hit adds the hit tile's matched-edge chips; hitting another special fires it; each firing special adds +1 mult.
+- Terrain yield: village 8, water 6, field 5, forest 4, meadow 3.
+- Placement: each matching edge adds its yield and +1 multiplier (base multiplier 1). Perfect (2+ neighbors, all match) ×2 multiplier. Golden tiles ×2. Perfect streak adds +streak multiplier.
+- Special tiles (~10%): windmill (3 rays, length 3), lighthouse (1 ray to the edge of the land, rotates), bell tower (6 neighbors). Each hit adds the hit tile's matched-edge yield; hitting another special fires it; each firing special adds +1 multiplier.
 - Quests (~17% of tiles): link N tiles of a terrain via matching edges → +2 tiles and bonus points.
-- Round: 12 tiles, then the harvest scores every region of 2+ linked tiles (chips per tile × size, +1 mult per 3 tiles) and fires all specials. Placement points + harvest must reach the goal.
-- 8 rounds, goals `[600, 4000, 10000, 34000, 78000, 130000, 340000, 480000]` (rebalanced in Godot, see Balance below; the reference used `[1500, 5000, 12000, 35000, 75000, 110000, 240000, 420000]`). Bosses on rounds 3, 6 and 8; beating one gives two relic picks.
+- Round: 10 tiles (`Defs.TILES_PER_ROUND`; the reference used 12), then the harvest scores every region of 2+ linked tiles (yield per tile × size, +1 multiplier per 3 tiles) and fires all specials. Placement points + harvest must reach the goal.
+- 8 rounds, goals `[500, 3200, 9500, 30000, 66000, 120000, 240000, 340000]` (rebalanced in Godot, see Balance below; the reference used `[1500, 5000, 12000, 35000, 75000, 110000, 240000, 420000]`). Bosses on rounds 3, 6 and 8; beating one gives two relic picks.
 - 20 relics, listed in the reference's `RELICS` array.
 
 ### Rivers and railroads (Godot-only, not in the reference)
 - About 30% of non-special tiles carry a river (55%) or a railroad, drawn over their land. Feature tiles keep their normal mix of 1-4 biomes; feature edges never sit on water edges.
-- **Linking:** a river or rail edge that meets the same feature across an edge adds its chips (river 6, rail 8) and +1 mult, like a matching land edge. A river edge that runs into a plain water edge (a river mouth, `Rules.is_mouth`) counts as a matched land edge scored as water (6 chips, +1 mult), so it never breaks a perfect placement; it is not scored a second time as a river link. Ray hits count these links too. Drought zeroes river chips.
+- **Linking:** a river or rail edge that meets the same feature across an edge adds its yield (river 6, rail 8) and +1 multiplier, like a matching land edge. A river edge that runs into a plain water edge (a river mouth, `Rules.is_mouth`) counts as a matched land edge scored as water (6 yield, +1 multiplier), so it never breaks a perfect placement; it is not scored a second time as a river link. Ray hits count these links too. Drought zeroes river yield.
 - **No cutting:** a placement is illegal if any shared edge leaves a river or track dangling (`Rules.line_breaks` / `feat_cut`): rail must meet rail, and a river must meet river or water. If the current tile has no legal spot in any rotation, the rule is lifted for that tile (`RunState.line_rule_lifted`).
 - **Railroads start and end in cities:** a station is a rail tile with exactly one rail edge, leaving from a village edge. Track pieces (2-3 rail edges) are only dealt while a railroad on the board has an open end; otherwise railroads come as stations. Rivers have no start tile: river pieces are dealt while a river end or a water edge is open, otherwise no river is dealt.
-- **Harvest:** a railroad network scores only between 2+ stations; a river network only once it reaches water at 2+ ends. Then: feature chips per tile, +1 mult per 3 tiles, +1 mult per end.
+- **Harvest:** a railroad network scores only between 2+ stations; a river network only once it reaches water at 2+ ends. Then: feature yield per tile, +1 multiplier per 3 tiles, +1 multiplier per end.
 - **Closing a line** (no open ends, finished at both ends) pays an immediate bonus: `Defs.CLOSE_BONUS` (river 1.2%, rail 1.5%) of the round goal per tile, up to 10 tiles (`Rules.close_bonus`, `RunState.closed_lines`). A water tile that catches an open river end closes it too.
 - **Closing a biome area** (a region of one land type, linked by matching edges, with no edge of that land facing an empty spot; bordered by matching or other land) pays an immediate bonus that grows faster than its size: `goal * REGION_BONUS * n * (1 + n / REGION_GROWTH)` for n tiles (min 3, capped at 16; `Rules.region_bonus`, `RunState.closed_regions`). Covering a region's last open edge with any land closes it. `RunState.closing_bonus` sums line and area bonuses for the preview hint and the bots.
 
@@ -43,12 +45,13 @@ Patchland is a hex tile-placement roguelite: Dorfromantik's edge matching plus B
 5. Overlays, saving best score, settings (mute).
 6. Steam (GodotSteam), achievements.
 
+- The tray shows the current tile plus the next two (`RunState.nxt`, `nxt2`); the Fog boss hides both.
 ## Controls
 Hover a dashed slot to preview, left click places. **Right click rotates the tile clockwise** (shift + right click: counter-clockwise), on the board or on the tray tile. Ctrl + scroll, R/E/Q, the Rotate button and clicking (or scrolling on) the tray tile also rotate. X redraws, arrows cycle slots, Enter/Space places, M mutes. Clicking during the harvest speeds it up.
 
 Camera: scroll zooms toward the cursor (0.45x to 4x of the auto-fit), left-drag (past 10 px) or middle-drag pans, WASD pans, +/- zoom, F / Home or double-clicking empty ground resets to the auto-fit view. Trackpad pinch and two-finger pan work too. The player view is stored as `Board.user_zoom` / `user_pan` on top of the auto-fit, so it keeps following the board as it grows. The automatic view is sticky (`Board._fit`): it only zooms out when the board would no longer fit and only moves as far as needed to keep everything on screen, so the camera stays calm while placing. Screen shake is capped at 8 px and placement shake stays small (big shakes are for the harvest and round end).
 
-Fullscreen: F11, Alt+Enter or the HUD button; the choice is saved in `user://patchland.cfg`. The board spans the whole window while the HUD, relic strip and tray stay `Game.CONTENT_W` wide.
+Fullscreen: F11, Alt+Enter or the HUD button; the choice is saved in `user://patchland.cfg`. It cannot work while the game runs embedded in the editor's Game tab (Godot 4.4+ default); the game detects that (`Engine.is_embedded_in_editor()`) and shows a toast saying to turn off "Embed Game on Next Play". The board spans the whole window while the HUD, relic strip and tray stay `Game.CONTENT_W` wide.
 
 ## Implementation notes
 - Main scene `main.tscn` → `ui/game.gd` (builds all UI in code, owns `RunState`, runs `after()`/`step_q()` timed sequences like the reference).
@@ -67,7 +70,7 @@ Rivers/railroads rule checks: `godot --headless --path . -s res://tests/features
 Visual smoke test (needs a window, not `--headless`): `godot --path . -s res://tests/screenshot.gd -- <output folder>` plays the opening, right-clicks to rotate (prints the rotation change), zooms and pans the camera, toggles fullscreen on and back, finishes round 1 and saves PNGs of each stage.
 
 ### Balance
-Goals are set from bot runs. `GODOT=<console exe> tests/balance.sh [procs] [runs_per_proc]` runs `run_sim.gd --nofail` in parallel for the `greedy` bot (every slot and rotation, plus harvest look-ahead: an expert) and the `casual` bot (half the slots, 3 rotations: a person scanning the board), and prints per-round p25/median/p75 next to the goals. Targets used for the current goals: casual clears rounds 1-4 about 80-90% of the time and rounds 7-8 about 40-55%; greedy clears every early round and rounds 7-8 about 70-80%. Whole runs (stopping at a miss), with closing bonuses counted by both bots: greedy won 16 of 24, casual 9 of 24. Re-run after any scoring change.
+Goals are set from bot runs. `GODOT=<console exe> tests/balance.sh [procs] [runs_per_proc]` runs `run_sim.gd --nofail` in parallel for the `greedy` bot (every slot and rotation, plus harvest look-ahead: an expert) and the `casual` bot (half the slots, 3 rotations: a person scanning the board), and prints per-round p25/median/p75 next to the goals. Targets used for the current goals: casual clears rounds 1-4 about 80-90% of the time and rounds 7-8 about 40-55%; greedy clears every early round and rounds 7-8 about 70-80%. Whole runs (stopping at a miss), 10 tiles per round, closing bonuses counted by both bots: greedy won 11 of 30, casual 2 of 30 (made deliberately harder; casual losses spread over rounds 2-8). Re-run after any scoring change.
 
 ## Backlog (not yet built)
 Closing regions that bloom and cascade into neighbors; ripple scoring through neighbors that become perfect; tile transformations (water surrounded by fields becomes farmland, villages merge into towns); relics that fire in a player-chosen order; retriggers; relics that scale up over a run.

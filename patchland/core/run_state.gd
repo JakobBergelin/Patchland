@@ -25,6 +25,7 @@ var best_harvest := 0
 var survey_bonus := 0
 var cur: Tile
 var nxt: Tile
+var nxt2: Tile  # the tile after next (two upcoming tiles are shown)
 var busy := false
 var picks := 0
 var boss := ""
@@ -117,10 +118,11 @@ func start_round() -> void:
 	round_score = 0
 	var bi := Defs.BOSS_ROUNDS.find(round_idx)
 	boss = boss_order[bi] if bi >= 0 else ""
-	tiles_left = 12 + (2 if has_relic("carto") else 0) - (3 if boss == "short" else 0)
+	tiles_left = Defs.TILES_PER_ROUND + (2 if has_relic("carto") else 0) - (3 if boss == "short" else 0)
 	redraws = 0 if boss == "fog" else 2 + (2 if has_relic("second") else 0)
 	cur = make_tile()
 	nxt = make_tile()
+	nxt2 = make_tile()
 	busy = false
 	refresh_line_rule()
 	harvest_base = Rules.harvest_calc(self).total
@@ -141,7 +143,8 @@ func redraw() -> bool:
 		return false
 	redraws -= 1
 	cur = nxt
-	nxt = make_tile()
+	nxt = nxt2
+	nxt2 = make_tile()
 	refresh_line_rule()
 	return true
 
@@ -160,7 +163,8 @@ func place(q: int, r: int) -> Dictionary:
 	busy = true
 	survey_bonus = 0
 	cur = nxt
-	nxt = make_tile()
+	nxt = nxt2
+	nxt2 = make_tile()
 	recompute_cands()
 	refresh_line_rule()
 	return {"entry": entry, "ev": ev, "events": events}

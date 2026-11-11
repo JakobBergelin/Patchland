@@ -39,39 +39,41 @@ const SPECIALS := {
 const SKEYS := ["windmill", "lighthouse", "belltower"]
 
 const RELICS := [
-	{"id": "saw", "name": "Sawmill", "t": "forest", "desc": "Forest edges give +4 chips."},
-	{"id": "falu", "name": "Falu paint", "t": "village", "desc": "Village edges give +8 chips."},
-	{"id": "mill", "name": "Watermill", "t": "water", "desc": "Each matched water edge adds +1 mult."},
-	{"id": "harvest", "name": "Harvest fair", "t": "field", "desc": "+3 mult when a field edge matches."},
+	{"id": "saw", "name": "Sawmill", "t": "forest", "desc": "Forest edges give +4 yield."},
+	{"id": "falu", "name": "Falu paint", "t": "village", "desc": "Village edges give +8 yield."},
+	{"id": "mill", "name": "Watermill", "t": "water", "desc": "Each matched water edge adds +1 multiplier."},
+	{"id": "harvest", "name": "Harvest fair", "t": "field", "desc": "+3 multiplier when a field edge matches."},
 	{"id": "wild", "name": "Open meadow", "t": "meadow", "desc": "Meadow edges match any land."},
 	{"id": "ferry", "name": "Ferryman", "t": "water", "desc": "Water and village edges match each other."},
-	{"id": "plumb", "name": "Plumb line", "t": "village", "desc": "Perfect placements give ×3 mult instead of ×2."},
-	{"id": "patch", "name": "Patchwork", "t": "meadow", "desc": "+4 mult when you match 3 or more kinds of land at once."},
-	{"id": "almanac", "name": "Almanac", "t": "field", "desc": "Gains +1 mult for every perfect placement. Also counts in the harvest."},
-	{"id": "mono", "name": "Monoculture", "t": "forest", "desc": "+40 chips for tiles with only one kind of land."},
+	{"id": "plumb", "name": "Plumb line", "t": "village", "desc": "Perfect placements give ×3 multiplier instead of ×2."},
+	{"id": "patch", "name": "Patchwork", "t": "meadow", "desc": "+4 multiplier when you match 3 or more kinds of land at once."},
+	{"id": "almanac", "name": "Almanac", "t": "field", "desc": "Gains +1 multiplier for every perfect placement. Also counts in the harvest."},
+	{"id": "mono", "name": "Monoculture", "t": "forest", "desc": "+40 yield for tiles with only one kind of land."},
 	{"id": "carto", "name": "Cartographer", "t": "meadow", "desc": "+2 tiles every round."},
 	{"id": "second", "name": "Second thoughts", "t": "water", "desc": "+2 redraws every round."},
 	{"id": "goldsmith", "name": "Goldsmith", "t": "village", "desc": "Golden tiles show up three times as often."},
-	{"id": "surveyor", "name": "Surveyor", "t": "field", "desc": "Quests also give +3 mult to your next placement."},
-	{"id": "granary", "name": "Granary", "t": "field", "desc": "Field regions give double chips in the harvest."},
-	{"id": "oak", "name": "Old oak", "t": "forest", "desc": "Forest regions of 6+ tiles give +3 mult in the harvest."},
+	{"id": "surveyor", "name": "Surveyor", "t": "field", "desc": "Quests also give +3 multiplier to your next placement."},
+	{"id": "granary", "name": "Granary", "t": "field", "desc": "Field regions give double yield in the harvest."},
+	{"id": "oak", "name": "Old oak", "t": "forest", "desc": "Forest regions of 6+ tiles give +3 multiplier in the harvest."},
 	{"id": "miller", "name": "Miller", "t": "field", "desc": "Windmills fire twice."},
-	{"id": "keeper", "name": "Lamplighter", "t": "water", "desc": "Each special tile that fires adds +2 mult instead of +1."},
+	{"id": "keeper", "name": "Lamplighter", "t": "water", "desc": "Each special tile that fires adds +2 multiplier instead of +1."},
 	{"id": "rope", "name": "Bell rope", "t": "village", "desc": "Bell towers also ring tiles 2 steps away."},
 	{"id": "architect", "name": "Architect", "t": "meadow", "desc": "Special tiles show up twice as often."},
 ]
 
 const BOSSES := [
-	{"id": "drought", "name": "Drought", "desc": "Water gives no chips this round, harvest included."},
-	{"id": "blight", "name": "Blight", "desc": "Forest gives no chips this round, harvest included."},
-	{"id": "lean", "name": "Lean year", "desc": "Villages give no chips this round, harvest included."},
-	{"id": "fog", "name": "Fog", "desc": "You can’t see your next tile, and you get no redraws."},
+	{"id": "drought", "name": "Drought", "desc": "Water gives no yield this round, harvest included."},
+	{"id": "blight", "name": "Blight", "desc": "Forest gives no yield this round, harvest included."},
+	{"id": "lean", "name": "Lean year", "desc": "Villages give no yield this round, harvest included."},
+	{"id": "fog", "name": "Fog", "desc": "You can’t see your next tiles, and you get no redraws."},
 	{"id": "short", "name": "Short season", "desc": "You get 3 fewer tiles this round."},
 ]
 
 const BOSS_ROUNDS := [2, 5, 7]
 const ROUNDS := 8
-const GOALS := [600, 4000, 10000, 34000, 78000, 130000, 340000, 480000]
+## Tiles dealt each round (before Cartographer +2 and Short season -3).
+const TILES_PER_ROUND := 10
+const GOALS := [500, 3200, 9500, 30000, 66000, 120000, 240000, 340000]
 
 
 static func relic(id: String) -> Dictionary:
