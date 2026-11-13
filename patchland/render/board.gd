@@ -13,6 +13,8 @@ signal speed_up_requested
 
 var game  # Game (reads S, sel, cur_eval, harvesting, hl_region)
 var fx := Fx.new()
+var ambient := Ambient.new()
+var _ambient_dirty := true
 var cam := {"x": 0.0, "y": 0.0, "size": 40.0}
 var snap_cam := true
 var shake_amp := 0.0
@@ -86,6 +88,8 @@ func clear_tiles() -> void:
 	nodes.clear()
 	fx.clear()
 	_flashes.clear()
+	ambient.clear()
+	_ambient_dirty = true
 	shake_amp = 0
 	punch = 0
 	snap_cam = true
@@ -99,6 +103,7 @@ func add_tile(entry: Dictionary, born: float) -> void:
 	tile_layer.add_child(n)
 	n.refresh()
 	nodes[entry.k] = n
+	_ambient_dirty = true
 
 
 func sync_tiles(board: Dictionary) -> void:
@@ -285,6 +290,11 @@ func _process(dt: float) -> void:
 		punch = maxf(0, punch - dt * (punch * 10 + 0.02))
 	if not reduced:
 		mill_angle += dt * (9.0 if now < mill_fast_until else 1.1)
+	if _ambient_dirty and not reduced:
+		_ambient_dirty = false
+		ambient.rebuild(game.S)
+	if not reduced:
+		ambient.update(dt)
 	_key_pan(dt)
 	_update_cam(dt)
 
@@ -377,6 +387,10 @@ func _draw_fx() -> void:
 			var p := _screen_of(k)
 			TileArt.stroke_hex(ci, p, s * 0.94, glow, maxf(1.5, s * 0.07) + 5)
 			TileArt.stroke_hex(ci, p, s * 0.94, Color(1, 1, 1, 0.95), maxf(1.5, s * 0.07))
+
+	# signs of life: trains, boats, people, deer (decorative)
+	if not reduced:
+		ambient.draw(ci, ws, s)
 
 	# golden tiles: a soft pulsing ring so they stand out on a busy board
 	var pulse := 0.5 + 0.5 * sin(now / 420.0)

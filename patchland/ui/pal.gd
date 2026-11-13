@@ -16,7 +16,7 @@ static var bold: Font
 
 
 static func init() -> void:
-	if DisplayServer.is_dark_mode():
+	if true:  # the game always uses its dark look, to match ui/theme/patchland_theme.tres
 		bg = Color("#141b19")
 		bg2 = Color("#23312d")
 		ink = Color("#f2f7f5")

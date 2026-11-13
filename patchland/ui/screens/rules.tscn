@@ -1,0 +1,88 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ui/screens/rules.gd" id="1_rules"]
+[ext_resource type="Script" path="res://ui/cluster_view.gd" id="2_cluster"]
+
+[node name="Rules" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_rules")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 56
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 56
+theme_override_constants/margin_bottom = 32
+
+[node name="Sheet" type="PanelContainer" parent="Margin"]
+layout_mode = 2
+theme_type_variation = &"Sheet"
+
+[node name="Row" type="HBoxContainer" parent="Margin/Sheet"]
+layout_mode = 2
+theme_override_constants/separation = 28
+
+[node name="Side" type="VBoxContainer" parent="Margin/Sheet/Row"]
+custom_minimum_size = Vector2(230, 0)
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Margin/Sheet/Row/Side"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "How to play"
+
+[node name="Topics" type="VBoxContainer" parent="Margin/Sheet/Row/Side"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 4
+
+[node name="Back" type="Button" parent="Margin/Sheet/Row/Side"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Back"
+
+[node name="Page" type="PanelContainer" parent="Margin/Sheet/Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"Card"
+
+[node name="Scroll" type="ScrollContainer" parent="Margin/Sheet/Row/Page"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Box" type="VBoxContainer" parent="Margin/Sheet/Row/Page/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="TopicTitle" type="Label" parent="Margin/Sheet/Row/Page/Scroll/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"SubheadingLabel"
+theme_override_font_sizes/font_size = 24
+text = "Basics"
+
+[node name="Picture" type="Control" parent="Margin/Sheet/Row/Page/Scroll/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 210)
+layout_mode = 2
+script = ExtResource("2_cluster")
+
+[node name="Body" type="VBoxContainer" parent="Margin/Sheet/Row/Page/Scroll/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10

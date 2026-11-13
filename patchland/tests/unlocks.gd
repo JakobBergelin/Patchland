@@ -31,8 +31,9 @@ func _run() -> void:
 	# --- fresh profile ---
 	check(Unlocks.specials(CFG).is_empty(), "no special tiles unlocked at first")
 	check(Unlocks.relics(CFG).size() == Unlocks.STARTER_RELICS.size(), "only the %d starter relics at first" % Unlocks.STARTER_RELICS.size())
+	check(Defs.SKEYS.size() == 10 and Defs.RELICS.size() == 38, "content.tres loads 10 special tiles and 38 relics")
 	var pr := Unlocks.progress(CFG)
-	check(pr == Vector2i(8, Defs.SKEYS.size() + Defs.RELICS.size()), "progress counts starters: %s" % pr)
+	check(pr == Vector2i(Unlocks.STARTER_RELICS.size(), Defs.SKEYS.size() + Defs.RELICS.size()), "progress counts starters: %s" % pr)
 	check(Unlocks.LIST.size() + Unlocks.STARTER_RELICS.size() == pr.y, "every special and relic is either a starter or has an achievement")
 
 	# --- dealing and drafting respect the allowed lists ---
@@ -65,11 +66,11 @@ func _run() -> void:
 	r.new_run(1)
 	check(Unlocks.check(CFG, r).is_empty(), "a fresh run unlocks nothing")
 	for a in Unlocks.LIST:
-		r.set(a.stat, a.need)
+		r.set(a.stat, maxi(int(r.get(a.stat)), a.need))  # several share a stat: keep the highest
 	var got := Unlocks.check(CFG, r)
 	check(got.size() == Unlocks.LIST.size(), "all %d achievements can unlock (%d)" % [Unlocks.LIST.size(), got.size()])
 	check(Unlocks.check(CFG, r).is_empty(), "each unlocks only once")
-	check(Unlocks.specials(CFG).size() == 3 and Unlocks.relics(CFG).size() == 20, "after that everything is unlocked")
+	check(Unlocks.specials(CFG).size() == Defs.SKEYS.size() and Unlocks.relics(CFG).size() == Defs.RELICS.size(), "after that everything is unlocked")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(CFG))
 	r.new_run(1)
 	r.rounds_cleared = 1
@@ -90,7 +91,7 @@ func _run() -> void:
 	p.round_idx = 2
 	p.mark_cleared()
 	check(p.rounds_cleared == 3 and p.bosses_beaten == 1, "clearing a boss round counts rounds and bosses")
-	var fake := {"perfect": true, "nb": 2, "total": 0, "events": [{}, {}], "feat_matches": 0}
+	var fake := {"perfect": true, "nb": 2, "total": 0, "events": [{"rays": [1]}, {"rays": [1]}], "feat_matches": 0}
 	var gt := mk(["meadow", "meadow", "meadow", "meadow", "meadow", "meadow"])
 	gt.gold = true
 	p.board[Vector2i(5, 5)] = RunState.make_entry(5, 5, gt)
