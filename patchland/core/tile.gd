@@ -155,7 +155,8 @@ static func make(rng: RandomNumberGenerator, min_kinds := 0, plain := false, rel
 		tile.base.append(run[(i + off) % 6])
 	tile.art_seed = rng.randi_range(0, 999999999)
 	if not plain:
-		var special_chance := 0.2 if relics.has("architect") else 0.1
+		# more unlocked special kinds = more special tiles (unlocks never dilute them)
+		var special_chance := (0.06 + 0.014 * specials.size()) * (2.0 if relics.has("architect") else 1.0)
 		var gold_chance := 0.18 if relics.has("goldsmith") else 0.06
 		# only unlocked special tiles can be dealt; with none unlocked, no specials at all
 		if not specials.is_empty() and rng.randf() < special_chance:

@@ -12,21 +12,23 @@ Patchland is a hex tile-placement roguelite: lay tiles so their edges match the 
 - Keep game rules free of rendering code so they can be tested headless.
 
 ## Architecture
-- `core/` — pure GDScript, no nodes: `HexGrid` (axial coords, pointy-top, DIRS = E, NE, NW, W, SW, SE), `Tile` (6 edge terrains, rotation, gold/quest/special flags), `Rules` (match check, `evaluate()` placement scoring, `harvest_calc()`, `resolve_rays()`, region BFS, quests), `RunState` (round, goals, relics, bosses, streak, almanac).
-- `render/` — `TileArt` bakes one texture per tile+rotation (port `renderTile`, trees, houses, hay, bushes, windmill/lighthouse/bell tower, pennants, sails); `Board` node draws tiles depth-sorted by y, ghost preview, match indicators, ray previews, region highlight.
-- `fx/` — particles, floating text, rings, beams, screen shake and zoom punch, tween-based drop/squash/hop.
-- `audio/` — synth helpers (tone with slide, filtered noise hit) and the `sfx` set from the reference.
-- `ui/` — HUD (round, score, goal bar with "on pace" segment, tiles left), relic strip, tray (current/next tile, yield × multiplier readout, hint), overlays (intro, relic draft, game over, win), banners, toasts.
-- `tests/` — headless scripts, including a greedy bot that plays full runs and prints per-round scores (used to set goals).
+- `data/` — **editable content**: `content.tres` (a `ContentDB` resource) holds every special tile (`SpecialDef`), relic (`RelicDef`), unlock condition, the Season 1 goals, tiles per round, Season goal scales and rarity weights. Edit it in the Inspector; `Defs` loads it at startup (`Defs.load_content`) into `SPECIALS` / `SKEYS` / `RELICS` / `GOALS`. Ids are referenced by the rules code and saves, so don't rename them.
+- `core/` — pure GDScript, no nodes: `Hex` (axial coords, pointy-top, DIRS = E, NE, NW, W, SW, SE), `Tile` (6 edge terrains, rotation, gold/quest/special flags, rivers/rails), `Rules` (match check, `evaluate()` placement scoring, `harvest_calc()`, `resolve_rays()`, regions, lines), `RunState` (round, goals, relics, bosses, streak, achievement stats), `Unlocks` (achievements, Seasons), `Scores`.
+- `render/` — `TileArt` records each tile's drawing once per tile+rotation (terrain, trees, houses, every special structure, pennants, sails); `Board` draws tiles depth-sorted by y, ghost preview, indicators, ray previews, highlights; `Ambient` adds trains, boats, people and deer.
+- `fx/` — particles, floating text, rings, beams, screen shake and zoom punch.
+- `audio/` — synth helpers (tone with slide, filtered noise hit) and the sfx set.
+- `ui/` — `game.gd` (HUD, tray, run flow, sheets for the relic draft and run end), `theme/patchland_theme.tres` (all fonts, colours and button/panel styles as type variations: PrimaryButton, GoldButton, GhostButton, TabButton, Sheet, Card, CardLocked, Pill, Rail, TitleLabel, HeadingLabel, …), `screens/` (main menu, collection, rules, scoreboard as `.tscn` scenes with small scripts that fill content and emit signals).
+- `tests/` — headless rule tests, window tests with screenshots, and the bot sims used to set goals.
 
 ## Rules summary (see reference for exact numbers)
 - Terrain yield: village 8, water 6, field 5, forest 4, meadow 3.
 - Placement: each matching edge adds its yield and +1 multiplier (base multiplier 1). Perfect (2+ neighbors, all match) ×2 multiplier. Golden tiles ×2. Perfect streak adds +streak multiplier.
-- Special tiles (~10%): windmill (3 rays, length 3), lighthouse (1 ray to the edge of the land, rotates), bell tower (6 neighbors). Each hit adds the hit tile's matched-edge yield; hitting another special fires it; each firing special adds +1 multiplier.
+- Special tiles: chance `0.06 + 0.014 × unlocked kinds` (×2 with Architect), so unlocking more kinds means more specials, never fewer of each. Ray kinds: windmill (3 rays, length 3), lighthouse (1 ray to the edge of the land), bell tower (6 neighbors); each hit adds the hit tile's matched-edge yield, hitting another special fires it, each firing special adds +1 multiplier (`resolve_rays` only reports specials that actually fired). Landmarks (Scarecrow/field, Dam/water, Market/village, Hunting lodge/forest, Beehive/meadow) multiply their own land's area yield in the harvest (×2, ×3 with Stonemason) and add +2 multiplier to it; they're dealt with 3+ edges of their land (`Tile.fit_special`). Crossroads: all edges match any land. Standing stones: +1 harvest multiplier per special on the board.
 - Quests (~17% of tiles): link N tiles of a terrain via matching edges → +2 tiles and bonus points.
 - Round: 10 tiles (`Defs.TILES_PER_ROUND`; the reference used 12), then the harvest scores every region of 2+ linked tiles (yield per tile × size, +1 multiplier per 3 tiles) and fires all specials. Placement points + harvest must reach the goal.
-- 8 rounds, goals `[500, 3200, 9500, 30000, 66000, 120000, 240000, 340000]` (rebalanced in Godot, see Balance below; the reference used `[1500, 5000, 12000, 35000, 75000, 110000, 240000, 420000]`). Bosses on rounds 3, 6 and 8; beating one gives two relic picks.
-- 20 relics, listed in the reference's `RELICS` array.
+- 8 rounds; Season 1 goals `[500, 2600, 6000, 18000, 34000, 62000, 110000, 170000]` in `content.tres` (see Balance; the reference used `[1500, 5000, 12000, 35000, 75000, 110000, 240000, 420000]`). Bosses on rounds 3, 6 and 8; beating one gives two relic picks.
+- **Seasons** (difficulty): goals × `season_goal_scale` `[1, 1.4, 1.9, 2.4, 3]`, ramping in over the first 4 rounds (`RunState.goal`). Winning a Season opens the next (`Unlocks.record_win`); pick it in the main menu.
+- 38 relics (the reference's 20 plus 18 Godot-only) with rarity Common / Fine / Heirloom; the draft draws 3 by `rarity_weights` (6 / 3 / 1). Harvest-wide multiplier sources (Almanac, Fishing village, Junction, Jeweler, Standing stones) come back from `harvest_calc` as `extras` and get their own harvest step.
 
 ### Rivers and railroads (Godot-only, not in the reference)
 - About 30% of non-special tiles carry a river (55%) or a railroad, drawn over their land. Feature tiles keep their normal mix of 1-4 biomes; feature edges never sit on water edges.
@@ -53,12 +55,15 @@ Patchland is a hex tile-placement roguelite: lay tiles so their edges match the 
 - The **? button** opens the rules sheet (`show_rules`); Back returns to where it was opened from (`overlay_back`).
 
 ## Unlocks and collection
-- Special tiles and 12 of the 20 relics are locked at first and unlock through achievements (`core/unlocks.gd`, `Unlocks.LIST`: each checks one RunState stat against a threshold, e.g. Windmill = clear round 1, Lighthouse = close a river, Bell tower = clear round 3). The 8 `STARTER_RELICS` are always available. Unlocked ids are saved in the settings file (section `unlocks`).
+- All 10 special tiles and 30 of the 38 relics are locked at first and unlock through 40 achievements, one per item (`unlock_stat` / `unlock_need` / `unlock_text` on each def in `content.tres`; `Unlocks.LIST` is built from them). Each checks one RunState stat (e.g. Windmill = clear round 1, Lighthouse = close a river, Crossroads = a Perfect with 5+ neighbors). Relics marked `starter` (8) are always available. Unlocked ids and the highest open Season are saved in the settings file (section `unlocks`).
 - `RunState.allowed_specials` / `allowed_relics` limit what `Tile.make` deals and what `draft_pool` offers. They default to everything (sims, tests, test runs); Game sets them from the player's unlocks before `new_run()`.
 - Game calls `_check_unlocks()` after each placement, at round end (after `RunState.mark_cleared()`) and on game over; new unlocks join the current run at once and show a toast and on the end sheet. The tutorial and test runs never unlock anything.
-- **Collection** (main menu): every special tile and relic; locked ones are black silhouettes with how to unlock them, unlocked ones say what they do.
+- **Collection** (main menu, `ui/screens/collection.tscn`): tabs for special tiles, relics (with rarity filters) and Seasons; locked items are black silhouettes with how to unlock them, unlocked ones say what they do.
 - **Test run** switch in the main menu: the next run has everything unlocked and records no score or achievements (`Game.test_run`, per run `run_is_test`).
-- The bots in `run_sim.gd` play with everything unlocked, so the balance numbers describe an experienced player.
+- The bot sim takes `--profile all|mid|starter` (what it has unlocked) and `--season N`.
+
+## Ambient life (decorative)
+`render/ambient.gd`, rebuilt by the Board whenever tiles change: trains shuttle between stations on closed railroads (with smoke), boats sail closed rivers and drift on lakes of 3+ water tiles, people walk village areas (1 per 2 tiles, max 3 each), deer wander forests of 4+ tiles. Hard caps (3 trains, 3 boats, 8 people, 3 deer) keep it uncluttered; disabled with reduced motion.
 
 ## Controls
 Hover a dashed slot to preview, left click places. **Right click rotates the tile clockwise** (shift + right click: counter-clockwise), on the board or on the tray tile. Ctrl + scroll, R/E/Q, the Rotate button and clicking (or scrolling on) the tray tile also rotate. X redraws, arrows cycle slots, Enter/Space places, M mutes. Clicking during the harvest speeds it up.
@@ -68,11 +73,11 @@ Camera: scroll zooms toward the cursor (0.45x to 4x of the auto-fit), left-drag 
 Fullscreen: F11, Alt+Enter or the HUD button; the choice is saved in `user://patchland.cfg`. It cannot work while the game runs embedded in the editor's Game tab (Godot 4.4+ default); the game detects that (`Engine.is_embedded_in_editor()`) and shows a toast saying to turn off "Embed Game on Next Play". The board spans the whole window while the HUD, relic strip and tray stay `Game.CONTENT_W` wide.
 
 ## Implementation notes
-- Main scene `main.tscn` → `ui/game.gd` (builds all UI in code, owns `RunState`, runs `after()`/`step_q()` timed sequences like the reference).
+- Main scene `main.tscn` → `ui/game.gd` (builds the HUD and tray in code, owns `RunState`, runs `after()`/`step_q()` timed sequences like the reference). Full-screen screens are opened with `open_screen(path, kind)` inside the overlay; small sheets (draft, run end, tutorial end) use `open_overlay()`.
 - Tile "baking": each `TileNode` records its `draw_*` commands once per tile+rotation; Godot keeps the canvas command list until `queue_redraw()`. Windmill sails are a child node rotated each frame.
 - `Board` layers: slots and fx are drawn in screen space (port of `ws()`), tiles live in a y-sorted world layer scaled by the camera.
 - Board entries are Dictionaries (`{q, r, k, tile, quest, prog, qdone}`); edge results in `per` are ints (-1 none, 0 mismatch, 1 match).
-- Fonts are `SystemFont`s (Bricolage Grotesque if installed, else Segoe UI/Arial) until the OFL font file is added. Colours follow the OS light/dark mode (`ui/pal.gd`).
+- Fonts are `SystemFont`s (Bricolage Grotesque if installed, else Segoe UI/Arial) until the OFL font file is added; they live in the theme. The game always uses its dark palette (`ui/pal.gd`, matching the theme).
 
 ## Testing
 Run headless from the project folder, for example:
@@ -83,12 +88,26 @@ Rivers/railroads rule checks: `godot --headless --path . -s res://tests/features
 
 Menus test (needs a window): `godot --path . -s res://tests/menus.gd -- <output folder>` walks the main menu, the whole tutorial, a real run with Esc pause, the rules sheet, the scoreboard, unlocking, the Collection and a test run (own settings file).
 
-Unlock rules (headless): `godot --headless --path . -s res://tests/unlocks.gd`.
+Unlock rules (headless): `godot --headless --path . -s res://tests/unlocks.gd`. New tiles and relics do what they say (headless): `godot --headless --path . -s res://tests/content.gd`.
 
 Visual smoke test (needs a window, not `--headless`): `godot --path . -s res://tests/screenshot.gd -- <output folder>` plays the opening, right-clicks to rotate (prints the rotation change), zooms and pans the camera, toggles fullscreen on and back, finishes round 1 and saves PNGs of each stage.
 
 ### Balance
-Goals are set from bot runs. `GODOT=<console exe> tests/balance.sh [procs] [runs_per_proc]` runs `run_sim.gd --nofail` in parallel for the `greedy` bot (every slot and rotation, plus harvest look-ahead: an expert) and the `casual` bot (half the slots, 3 rotations: a person scanning the board), and prints per-round p25/median/p75 next to the goals. Targets used for the current goals: casual clears rounds 1-4 about 80-90% of the time and rounds 7-8 about 40-55%; greedy clears every early round and rounds 7-8 about 70-80%. Whole runs (stopping at a miss), 10 tiles per round, closing bonuses counted by both bots: greedy won 11 of 30, casual 2 of 30 (made deliberately harder; casual losses spread over rounds 2-8). Re-run after any scoring change.
+Goals are set from bot runs. Two bots: `greedy` (every slot and rotation plus harvest look-ahead, and picks the relic that helps its board most: an expert) and `casual` (half the slots, 3 rotations, random relic: a person scanning the board).
+- `GODOT=<console exe> tests/runs.sh [procs] [runs_per_proc] [season]` plays whole runs (a miss ends the run) for each bot and unlock profile and prints win rates.
+- `GODOT=<console exe> PROFILE=starter|mid|all tests/balance.sh [procs] [runs_per_proc]` prints per-round p25/median/p75 scores (`--nofail`) next to the goals.
+
+Current numbers (24 runs per line):
+
+| Profile, Season | greedy wins | casual |
+|---|---|---|
+| starter (fresh), Season 1 | 17% | 0% wins, reaches ~round 3 |
+| mid (ray specials, half the relics), Season 1 | 100% | 62% |
+| all unlocked, Season 1 | 100% | 67% |
+| all unlocked, Season 3 | 96% | 8% |
+| all unlocked, Season 5 | 54% | 0% |
+
+So a fresh profile has to unlock things to win, unlocks clearly make runs stronger (late-round scores roughly ×3 from starter to all), and Seasons keep it hard once everything is unlocked. Re-run after any scoring or content change.
 
 ## Backlog (not yet built)
 Closing regions that bloom and cascade into neighbors; ripple scoring through neighbors that become perfect; tile transformations (water surrounded by fields becomes farmland, villages merge into towns); relics that fire in a player-chosen order; retriggers; relics that scale up over a run.

@@ -87,7 +87,7 @@ func play_run(seed_val: int, bot: String, nofail: bool, profile := "all", season
 		for p in s.picks:
 			var pool := s.draft_pool()
 			if not pool.is_empty():
-				s.relics.append(pool[0].id)
+				s.relics.append(choose_relic(s, pool) if bot == "greedy" else pool[0].id)
 		s.next_round()
 	if cleared < 0:
 		cleared = Defs.ROUNDS
@@ -135,3 +135,30 @@ static func apply_profile(s: RunState, profile: String) -> void:
 		s.allowed_specials = ["windmill", "lighthouse", "belltower"]
 		var ids: Array = Defs.RELICS.map(func(r): return r.id)
 		s.allowed_relics = ids.slice(0, ids.size() / 2)
+
+
+## Rough value of relics whose benefit doesn't show in the current harvest
+## (extra tiles, redraws, placement bonuses), as a share of that harvest.
+const RELIC_FLAT := {
+	"carto": 0.35, "architect": 0.3, "plumb": 0.25, "pathfinder": 0.2, "almanac": 0.2, "second": 0.12,
+	"herald": 0.15, "momentum": 0.15, "oldmaps": 0.15, "bellows": 0.15, "keeper": 0.15, "wild": 0.15,
+	"trellis": 0.15, "hedgerows": 0.15, "clover": 0.1, "goldsmith": 0.1, "miller": 0.1, "prospector": 0.1,
+	"patch": 0.1, "ferry": 0.1, "mill": 0.1, "harvest": 0.1,
+}
+
+
+## The expert bot picks the relic that helps its board most: the gain in the
+## current harvest with the relic, plus a flat estimate for indirect relics.
+static func choose_relic(s: RunState, pool: Array) -> String:
+	var base: int = maxi(1, Rules.harvest_calc(s).total)
+	var best_id: String = pool[0].id
+	var best_v := -INF
+	for r in pool:
+		s.relics.append(r.id)
+		var gain: float = Rules.harvest_calc(s).total - base
+		s.relics.pop_back()
+		var v: float = gain + base * RELIC_FLAT.get(r.id, 0.06)
+		if v > best_v:
+			best_v = v
+			best_id = r.id
+	return best_id

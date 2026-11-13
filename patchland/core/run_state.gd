@@ -71,6 +71,9 @@ func goal() -> int:
 	if goal_override > 0:
 		return goal_override
 	var scale: float = Defs.SEASON_SCALE[clampi(season - 1, 0, Defs.SEASON_SCALE.size() - 1)]
+	# the Season's extra difficulty ramps in over the first 4 rounds: round 1 (few
+	# tiles, no relics yet) is mostly luck, so a full-strength goal there is unfair
+	scale = 1.0 + (scale - 1.0) * minf(1.0, (round_idx + 1) / 4.0)
 	return int(round(Defs.GOALS[round_idx] * scale / 100.0)) * 100 if scale != 1.0 else Defs.GOALS[round_idx]
 
 

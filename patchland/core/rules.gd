@@ -267,6 +267,7 @@ static func harvest_calc(s: RunState) -> Dictionary:
 						marks += 1
 				if marks > 0:
 					per *= 1 + marks * (2 if s.has_relic("stonemason") else 1)
+					m += 2 * marks
 				regions.append({"t": t, "tiles": comp, "n": comp.size(), "per": per, "chips": per * comp.size(), "mult": m, "landmarks": marks})
 	# river and railroad networks: they only score once they run end to end
 	# (water to water, station to station); +1 mult per 3 tiles and per end
