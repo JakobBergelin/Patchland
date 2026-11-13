@@ -6,6 +6,8 @@ extends SceneTree
 ##   --bot casual   like simple, but only looks at about half the slots and 3 of the 6
 ##                  rotations each turn (a rough model of a person scanning the board)
 ##   --nofail       keep playing after a missed goal, to measure every round's potential
+##   --profile all|mid|starter   what the bot has unlocked (default all)
+##   --season N     difficulty level (goal scale), default 1
 ## Each run also prints a "SCORES <bot> s1,s2,..." line for aggregating parallel runs.
 
 
@@ -14,6 +16,8 @@ func _init() -> void:
 	var seed0 := 1
 	var bot := "greedy"
 	var nofail := false
+	var profile := "all"
+	var season := 1
 	var args := OS.get_cmdline_user_args()
 	for i in args.size():
 		if args[i] == "--runs" and i + 1 < args.size():
@@ -24,12 +28,16 @@ func _init() -> void:
 			bot = args[i + 1]
 		elif args[i] == "--nofail":
 			nofail = true
+		elif args[i] == "--profile" and i + 1 < args.size():
+			profile = args[i + 1]
+		elif args[i] == "--season" and i + 1 < args.size():
+			season = int(args[i + 1])
 	var reached: Array[int] = []
 	reached.resize(Defs.ROUNDS + 1)
 	reached.fill(0)
 	var t0 := Time.get_ticks_msec()
 	for n in runs:
-		var res := play_run(seed0 + n, bot, nofail)
+		var res := play_run(seed0 + n, bot, nofail, profile, season)
 		reached[clampi(res.cleared, 0, Defs.ROUNDS)] += 1
 		print("run %d (%s): cleared %d/%d, total %s  rounds: %s" % [n + 1, bot, res.cleared, Defs.ROUNDS, Defs.fmt(res.total), res.labels])
 		print("SCORES %s %s" % [bot, ",".join(res.raw)])
@@ -41,9 +49,11 @@ func _init() -> void:
 var bot_rng := RandomNumberGenerator.new()
 
 
-func play_run(seed_val: int, bot: String, nofail: bool) -> Dictionary:
+func play_run(seed_val: int, bot: String, nofail: bool, profile := "all", season := 1) -> Dictionary:
 	bot_rng.seed = seed_val * 7 + 3
 	var s := RunState.new()
+	s.season = season
+	apply_profile(s, profile)
 	s.new_run(seed_val)
 	var labels: Array[String] = []
 	var raw: Array[String] = []
@@ -63,6 +73,7 @@ func play_run(seed_val: int, bot: String, nofail: bool) -> Dictionary:
 			s.busy = false
 		var h := Rules.harvest_calc(s)
 		s.apply_harvest(int(round(float(h.chips) * h.mult)))
+		s.record_harvest(h)
 		labels.append("%s/%s" % [Defs.fmt(s.round_score), Defs.fmt(s.goal())])
 		raw.append(str(s.round_score))
 		if not s.cleared() and cleared < 0:
@@ -71,6 +82,7 @@ func play_run(seed_val: int, bot: String, nofail: bool) -> Dictionary:
 				break
 		if s.is_last_round():
 			break
+		s.mark_cleared()
 		s.picks = 2 if s.boss != "" else 1
 		for p in s.picks:
 			var pool := s.draft_pool()
@@ -111,3 +123,15 @@ func best_move(s: RunState, bot: String) -> Dictionary:
 				best = {"score": score, "q": c.q, "r": c.r, "rot": rot}
 	s.cur.rot = base_rot
 	return best
+
+
+## What the bot has unlocked: "all" (default), "starter" (a fresh profile: no
+## specials, starter relics) or "mid" (the 3 ray specials and half the relics).
+static func apply_profile(s: RunState, profile: String) -> void:
+	if profile == "starter":
+		s.allowed_specials = []
+		s.allowed_relics = Unlocks.STARTER_RELICS.duplicate()
+	elif profile == "mid":
+		s.allowed_specials = ["windmill", "lighthouse", "belltower"]
+		var ids: Array = Defs.RELICS.map(func(r): return r.id)
+		s.allowed_relics = ids.slice(0, ids.size() / 2)

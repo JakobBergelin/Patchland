@@ -9,6 +9,10 @@ static func is_match(s: RunState, a: String, b: String) -> bool:
 		return true
 	if s.has_relic("wild") and (a == "meadow" or b == "meadow"):
 		return true
+	if s.has_relic("trellis") and ((a == "field" and b == "meadow") or (a == "meadow" and b == "field")):
+		return true
+	if s.has_relic("hedgerows") and ((a == "field" and b == "forest") or (a == "forest" and b == "field")):
+		return true
 	if s.has_relic("ferry") and ((a == "water" and b == "village") or (a == "village" and b == "water")):
 		return true
 	return false
@@ -79,7 +83,7 @@ static func land_value(s: RunState, e: Dictionary) -> int:
 			c += chip_val(s, "water")  # a river mouth matches as water
 			continue
 		var m: String = e.tile.edge(i)
-		if is_match(s, m, n.tile.edge((i + 3) % 6)):
+		if e.tile.is_wild() or n.tile.is_wild() or is_match(s, m, n.tile.edge((i + 3) % 6)):
 			c += chip_val(s, m)
 		var f := feat_link(e.tile, i, n.tile)
 		if f != "":
@@ -90,7 +94,7 @@ static func land_value(s: RunState, e: Dictionary) -> int:
 static func special_len(s: RunState, tile: Tile) -> int:
 	if tile.special == "belltower" and s.has_relic("rope"):
 		return 2
-	return Defs.SPECIALS[tile.special].len
+	return Defs.SPECIALS[tile.special].len + (1 if s.has_relic("bellows") else 0)
 
 
 static func ray_mult_per(s: RunState) -> int:
@@ -127,7 +131,8 @@ static func resolve_rays(s: RunState, starts: Array) -> Array:
 						queue.append(n)
 				if not hits.is_empty():
 					ev["rays"].append({"d": d, "hits": hits})
-			events.append(ev)
+			if not ev.rays.is_empty():  # only specials that actually fired
+				events.append(ev)
 	return events
 
 
@@ -214,13 +219,15 @@ static func region_bonus(s: RunState, n: int) -> int:
 	if n < Defs.REGION_MIN:
 		return 0
 	var m := mini(n, Defs.REGION_CAP)
-	return int(ceil(s.goal() * Defs.REGION_BONUS * m * (1.0 + m / Defs.REGION_GROWTH) / 10.0)) * 10
+	return int(ceil(s.goal() * Defs.REGION_BONUS * m * (1.0 + m / Defs.REGION_GROWTH) * (2 if s.has_relic("fence") else 1) / 10.0)) * 10
 
 
 ## Points for closing a line: a share of the round goal per tile, so the reward
 ## stays meaningful in every round (Defs.CLOSE_BONUS).
 static func close_bonus(s: RunState, net: Dictionary) -> int:
 	var pct: float = Defs.CLOSE_BONUS[net.f]
+	if (net.f == "rail" and s.has_relic("railway")) or (net.f == "river" and s.has_relic("pilot")):
+		pct *= 3
 	return int(ceil(s.goal() * pct * mini(net.tiles.size(), 10) / 10.0)) * 10
 
 
@@ -251,7 +258,16 @@ static func harvest_calc(s: RunState) -> Dictionary:
 			if comp.size() >= 2:
 				var per := chip_val(s, t) * (2 if t == "field" and s.has_relic("granary") else 1)
 				var m := int(comp.size() / 3) + (3 if t == "forest" and s.has_relic("oak") and comp.size() >= 6 else 0)
-				regions.append({"t": t, "tiles": comp, "n": comp.size(), "per": per, "chips": per * comp.size(), "mult": m})
+				if s.has_relic("abundance") and comp.size() >= 10:
+					m += 5
+				# landmarks of this land inside the area multiply its yield
+				var marks := 0
+				for x in comp:
+					if Defs.special_kind(x.tile.special) == "landmark" and Defs.SPECIALS[x.tile.special].terrain == t:
+						marks += 1
+				if marks > 0:
+					per *= 1 + marks * (2 if s.has_relic("stonemason") else 1)
+				regions.append({"t": t, "tiles": comp, "n": comp.size(), "per": per, "chips": per * comp.size(), "mult": m, "landmarks": marks})
 	# river and railroad networks: they only score once they run end to end
 	# (water to water, station to station); +1 mult per 3 tiles and per end
 	for f in Defs.FKEYS:
@@ -271,12 +287,28 @@ static func harvest_calc(s: RunState) -> Dictionary:
 	for r in regions:
 		chips += r.chips
 		mult += r.mult
-	if s.has_relic("almanac"):
-		mult += s.almanac
+	# extra multiplier sources, each shown as its own step in the harvest
 	var specials: Array = []
+	var golds := 0
 	for e in s.board.values():
 		if e.tile.special != "":
 			specials.append(e)
+		if e.tile.gold:
+			golds += 1
+	var extras: Array = []
+	if s.has_relic("almanac") and s.almanac > 0:
+		extras.append(["Almanac", s.almanac])
+	if s.has_relic("fishing") and s.rivers_closed > 0:
+		extras.append(["Fishing village", s.rivers_closed])
+	if s.has_relic("junction") and s.rails_closed > 0:
+		extras.append(["Junction", s.rails_closed])
+	if s.has_relic("jeweler") and golds > 0:
+		extras.append(["Jeweler", 2 * golds])
+	var stones := specials.filter(func(e): return e.tile.special == "stones").size()
+	if stones > 0:
+		extras.append(["Standing stones", stones * specials.size()])
+	for x in extras:
+		mult += x[1]
 	var events := resolve_rays(s, specials)
 	var fired := 0
 	for ev in events:
@@ -284,7 +316,7 @@ static func harvest_calc(s: RunState) -> Dictionary:
 		if not ev.rays.is_empty():
 			fired += 1
 	mult += fired * ray_mult_per(s)
-	return {"regions": regions, "events": events, "chips": chips, "mult": mult, "total": chips * mult}
+	return {"regions": regions, "events": events, "chips": chips, "mult": mult, "total": chips * mult, "extras": extras}
 
 
 ## Edges where placing `tile` at (q, r) would cut a river or railroad: a feature
@@ -338,6 +370,7 @@ static func evaluate(s: RunState, q: int, r: int, tile: Tile) -> Dictionary:
 	var feat_chips: Array[int] = [0, 0, 0, 0, 0, 0]
 	var feat_kind: Array[String] = ["", "", "", "", "", ""]  # which feature linked on each edge
 	var feat_matches := 0
+	var mismatches := 0
 	var feat_sum := 0
 	for i in 6:
 		var n = s.board.get(k + Hex.DIRS[i])
@@ -362,9 +395,10 @@ static func evaluate(s: RunState, q: int, r: int, tile: Tile) -> Dictionary:
 		else:
 			feat_per.append(0)
 		var mine := "water" if mouth else tile.edge(i)
-		var ok := mouth or is_match(s, mine, n.tile.edge((i + 3) % 6))
+		var ok: bool = mouth or tile.is_wild() or n.tile.is_wild() or is_match(s, mine, n.tile.edge((i + 3) % 6))
 		per.append(1 if ok else 0)
 		if not ok:
+			mismatches += 1
 			continue
 		matches += 1
 		kinds[mine] = true
@@ -405,11 +439,15 @@ static func evaluate(s: RunState, q: int, r: int, tile: Tile) -> Dictionary:
 		adds.append(["Almanac", s.almanac])
 	if s.survey_bonus > 0:
 		adds.append(["Surveyor", s.survey_bonus])
+	if s.has_relic("prospector") and s.quests > 0:
+		adds.append(["Prospector", s.quests])
 	if perfect and s.streak > 0:
-		adds.append(["Streak", s.streak])
+		adds.append(["Streak", s.streak * (2 if s.has_relic("momentum") else 1)])
 	if ray_fired > 0:
 		adds.append(["Ray chain" if ray_fired > 1 else "Rays", ray_fired * ray_mult_per(s)])
 	var chip_add := 40 if s.has_relic("mono") and tile.kinds().size() == 1 else 0
+	if s.has_relic("compost"):
+		chip_add += 2 * mismatches
 	chips += chip_add + ray_chips
 	var mult := 1 + matches + feat_matches
 	for a in adds:
@@ -418,7 +456,7 @@ static func evaluate(s: RunState, q: int, r: int, tile: Tile) -> Dictionary:
 	if perfect:
 		muls.append(["Perfect", 3 if s.has_relic("plumb") else 2])
 	if tile.gold:
-		muls.append(["Golden", 2])
+		muls.append(["Golden", 3 if s.has_relic("clover") else 2])
 	for m in muls:
 		mult *= m[1]
 	return {"chips": chips, "mult": mult, "total": chips * mult, "nb": nb, "matches": matches, "per": per, "perfect": perfect,

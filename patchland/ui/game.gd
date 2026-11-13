@@ -17,6 +17,7 @@ var started := false
 var test_run := false  # menu switch: everything unlocked, no scoreboard entry, no achievements
 var unlocked_this_run: Array = []  # achievements earned during the current run
 var run_is_test := false  # the current run was started as a test run
+var season_pick := 1  # Season (difficulty) chosen in the menu for the next run
 var run_active := false  # a run (or the tutorial) is in progress; the menu offers Continue
 var tut: Tutorial = null  # set while the tutorial runs
 var tut_hidden := false
@@ -665,6 +666,7 @@ func new_run(seed_val := -1, tutorial := false) -> void:
 	hl_region = null
 	board.clear_tiles()
 	S = RunState.new()
+	S.season = 1 if tutorial else season_pick
 	# which specials and relics can show up: your unlocks, or everything on a test run
 	run_is_test = test_run and not tutorial
 	if not run_is_test and not tutorial:
@@ -941,13 +943,15 @@ func start_harvest() -> void:
 		show_calc(0, 1, 0)
 		update_calc()
 		render_score())
-	if S.has_relic("almanac") and S.almanac > 0:
-		step_q(250, func():
-			acc.mult += S.almanac
+	# relic and Standing stones multipliers that apply to the whole harvest
+	for xi in H.extras.size():
+		var x: Array = H.extras[xi]
+		step_q(260, func():
+			acc.mult += x[1]
 			show_calc(acc.chips, acc.mult)
 			pop(mult_panel)
-			sfx.mult(0)
-			toast("Almanac +%d multiplier" % S.almanac))
+			sfx.mult(xi)
+			board.fx.float_at(board.cam.x, board.cam.y - 1.6 - 0.7 * xi, "%s +%d multiplier" % [x[0], x[1]], "mult", 0.95, true, 1300))
 	var regs: Array = H.regions.duplicate()
 	regs.sort_custom(func(a, b): return a.chips < b.chips or (a.chips == b.chips and a.n < b.n))
 	for r in regs:
@@ -1011,6 +1015,7 @@ func start_harvest() -> void:
 	step_q(700, func():
 		var total := int(round(float(acc.chips) * acc.mult))
 		S.apply_harvest(total)
+		S.record_harvest(H)
 		var g := float(S.goal())
 		show_calc(acc.chips, acc.mult, total)
 		pop(total_lbl)
@@ -1265,7 +1270,9 @@ func tile_hint(t: Tile) -> String:
 	if S != null and S.line_rule_lifted:
 		out += "No spot keeps every river and railroad intact, so this tile may cut one. "
 	if t.special != "":
-		return out + "%s: %s Every tile hit scores its land again, and hitting another special sets it off. " % [Defs.SPECIALS[t.special].name, Defs.SPECIALS[t.special].desc]
+		var sp: Dictionary = Defs.SPECIALS[t.special]
+		var extra := " Every tile hit scores its land again, and hitting another special sets it off." if sp.kind == "ray" else ""
+		return out + "%s: %s%s " % [sp.name, sp.desc, extra]
 	if t.is_station():
 		out += "Station: railroads start and end in cities. A line between two stations scores in the harvest, +1 multiplier per station. "
 	elif t.feature() == "rail":
@@ -1952,7 +1959,11 @@ func game_over() -> void:
 
 
 func win() -> void:
-	_end_sheet("All 8 rounds cleared", "Your countryside held up. The run scored %s points with %d relics." % [Defs.fmt(S.total), S.relics.size()], true)
+	var body := "Your countryside held up. The run scored %s points with %d relics." % [Defs.fmt(S.total), S.relics.size()]
+	if not run_is_test and Unlocks.record_win(settings_path, S.season):
+		body += " Season %d is now open: tougher goals for a bigger challenge." % (S.season + 1)
+		season_pick = S.season + 1
+	_end_sheet("Season %d cleared" % S.season, body, true)
 
 
 # ---------- unlocks and collection ----------

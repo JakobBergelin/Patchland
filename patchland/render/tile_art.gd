@@ -175,7 +175,7 @@ static func structure(ci: CanvasItem, kind: String, x: float, y: float, s: float
 		rect(ci, x - tw * 1.3, ty - s * 0.02, tw * 2.6, s * 0.035, Color("#3d3633"))
 		rect(ci, x - tw * 0.8, ty - s * 0.12, tw * 1.6, s * 0.1, Color("#ffe27a"))
 		poly(ci, [Vector2(x - tw * 1.1, ty - s * 0.12), Vector2(x, ty - s * 0.24), Vector2(x + tw * 1.1, ty - s * 0.12)], red)
-	else:
+	elif kind == "belltower":
 		var hw := s * 0.1
 		var h := s * 0.4
 		var d := s * 0.07
@@ -188,6 +188,99 @@ static func structure(ci: CanvasItem, kind: String, x: float, y: float, s: float
 		half_disc(ci, Vector2(x, by - h * 0.72), hw * 0.36, Color("#f1c34a"))
 		poly(ci, [Vector2(x - hw - s * 0.02, by - h), Vector2(x + hw * 0.2, by - h - s * 0.3), Vector2(x + hw + d, by - h - d * 0.6), Vector2(x + hw + s * 0.02, by - h)], Color("#3d3633"))
 		ci.draw_circle(Vector2(x + hw * 0.2, by - h - s * 0.31), s * 0.022, Color("#f1c34a"))
+	else:
+		extra_structure(ci, kind, x, by, s)
+
+
+## The newer special tiles. `by` is the ground line under the structure.
+static func extra_structure(ci: CanvasItem, kind: String, x: float, by: float, s: float) -> void:
+	var wood := Color("#5a4a3e")
+	var dark := Color("#3d3633")
+	match kind:
+		"crossroads":
+			# a ring of every land colour (it matches any land) and a signpost
+			var cols := ["forest", "field", "meadow", "water", "village", "forest"]
+			for k in 6:
+				var a := TAU * k / 6.0 - PI / 2
+				var p := Vector2(x, by - s * 0.02) + Vector2(cos(a) * s * 0.26, sin(a) * s * 0.12)
+				ci.draw_circle(p, s * 0.055 + 1.2, dark)
+				ci.draw_circle(p, s * 0.055, Defs.top(cols[k]))
+			rect(ci, x - s * 0.025, by - s * 0.5, s * 0.05, s * 0.5, wood)
+			var board := Color("#d9b77a")
+			poly(ci, [Vector2(x - s * 0.02, by - s * 0.46), Vector2(x + s * 0.22, by - s * 0.46), Vector2(x + s * 0.28, by - s * 0.41), Vector2(x + s * 0.22, by - s * 0.36), Vector2(x - s * 0.02, by - s * 0.36)], board)
+			poly(ci, [Vector2(x + s * 0.02, by - s * 0.32), Vector2(x - s * 0.2, by - s * 0.32), Vector2(x - s * 0.26, by - s * 0.27), Vector2(x - s * 0.2, by - s * 0.22), Vector2(x + s * 0.02, by - s * 0.22)], board.darkened(0.1))
+			ci.draw_line(Vector2(x + s * 0.02, by - s * 0.41), Vector2(x + s * 0.18, by - s * 0.41), wood, 1.0, true)
+			ci.draw_line(Vector2(x - s * 0.02, by - s * 0.27), Vector2(x - s * 0.16, by - s * 0.27), wood, 1.0, true)
+		"scarecrow":
+			rect(ci, x - s * 0.02, by - s * 0.46, s * 0.04, s * 0.46, wood)
+			rect(ci, x - s * 0.2, by - s * 0.34, s * 0.4, s * 0.035, wood)
+			poly(ci, [Vector2(x - s * 0.1, by - s * 0.36), Vector2(x + s * 0.1, by - s * 0.36), Vector2(x + s * 0.08, by - s * 0.14), Vector2(x - s * 0.08, by - s * 0.14)], Color("#3d6fa8"))
+			ci.draw_line(Vector2(x - s * 0.2, by - s * 0.33), Vector2(x - s * 0.25, by - s * 0.27), Color("#e2bb57"), 1.6, true)
+			ci.draw_line(Vector2(x + s * 0.2, by - s * 0.33), Vector2(x + s * 0.25, by - s * 0.27), Color("#e2bb57"), 1.6, true)
+			ci.draw_circle(Vector2(x, by - s * 0.43), s * 0.075, Color("#e8c97a"))
+			poly(ci, [Vector2(x - s * 0.13, by - s * 0.47), Vector2(x + s * 0.13, by - s * 0.47), Vector2(x + s * 0.05, by - s * 0.5), Vector2(x, by - s * 0.6), Vector2(x - s * 0.05, by - s * 0.5)], Color("#4a3a2c"))
+		"dam":
+			var stone := Color("#a3a7ab")
+			var w := s * 0.36
+			poly(ci, [Vector2(x - w, by), Vector2(x + w, by), Vector2(x + w * 0.9, by - s * 0.2), Vector2(x - w * 0.9, by - s * 0.2)], stone)
+			for row in 3:
+				var yy := by - s * 0.065 * (row + 1)
+				ci.draw_line(Vector2(x - w * 0.95, yy), Vector2(x + w * 0.95, yy), stone.darkened(0.3), 1.0, true)
+				for c in 4:
+					var xx := x - w + (c + 0.5 + 0.5 * (row % 2)) * w * 0.5
+					ci.draw_line(Vector2(xx, yy), Vector2(xx, yy + s * 0.065), stone.darkened(0.3), 1.0, true)
+			rect(ci, x - w * 0.92, by - s * 0.235, w * 1.84, s * 0.04, stone.lightened(0.2))
+			for k in 3:
+				var xx := x - w * 0.4 + k * w * 0.4
+				ci.draw_line(Vector2(xx, by - s * 0.02), Vector2(xx, by + s * 0.08), Color(1, 1, 1, 0.8), 1.4, true)
+		"market":
+			rect(ci, x - s * 0.24, by - s * 0.32, s * 0.03, s * 0.32, wood)
+			rect(ci, x + s * 0.21, by - s * 0.32, s * 0.03, s * 0.32, wood)
+			rect(ci, x - s * 0.24, by - s * 0.14, s * 0.48, s * 0.1, Color("#8a6a4a"))
+			for k in 5:
+				var px := x - s * 0.18 + k * s * 0.09
+				ci.draw_circle(Vector2(px, by - s * 0.16), s * 0.032, [Color("#e2533b"), Color("#f2c14e"), Color("#7cb342"), Color("#e2533b"), Color("#f2c14e")][k])
+			for k in 6:
+				var x0 := x - s * 0.28 + k * s * 0.0933
+				poly(ci, [Vector2(x0, by - s * 0.34), Vector2(x0 + s * 0.0933, by - s * 0.34), Vector2(x0 + s * 0.0466, by - s * 0.26)], Color("#c0392b") if k % 2 == 0 else Color("#f4efe6"))
+			poly(ci, [Vector2(x - s * 0.28, by - s * 0.34), Vector2(x + s * 0.28, by - s * 0.34), Vector2(x + s * 0.2, by - s * 0.46), Vector2(x - s * 0.2, by - s * 0.46)], Color("#c0392b"))
+			ci.draw_line(Vector2(x - s * 0.1, by - s * 0.46), Vector2(x - s * 0.14, by - s * 0.34), Color("#f4efe6"), 2.0, true)
+			ci.draw_line(Vector2(x + s * 0.1, by - s * 0.46), Vector2(x + s * 0.14, by - s * 0.34), Color("#f4efe6"), 2.0, true)
+		"lodge":
+			var log := Color("#7a5232")
+			var w := s * 0.22
+			var h := s * 0.2
+			rect(ci, x - w, by - h, w * 2, h, log)
+			for k in 4:
+				ci.draw_line(Vector2(x - w, by - h + k * h / 4.0 + 1), Vector2(x + w, by - h + k * h / 4.0 + 1), log.darkened(0.35), 1.0, true)
+			rect(ci, x - s * 0.05, by - h * 0.65, s * 0.1, h * 0.65, Color("#3a2420"))
+			poly(ci, [Vector2(x - w - s * 0.05, by - h), Vector2(x, by - h - s * 0.18), Vector2(x + w + s * 0.05, by - h)], Color("#4a3a2c"))
+			var ant := Color("#e8dcc4")
+			for sx in [-1.0, 1.0]:
+				var b := Vector2(x + sx * s * 0.03, by - h - s * 0.18)
+				ci.draw_line(b, b + Vector2(sx * s * 0.1, -s * 0.1), ant, 1.4, true)
+				ci.draw_line(b + Vector2(sx * s * 0.05, -s * 0.05), b + Vector2(sx * s * 0.04, -s * 0.11), ant, 1.2, true)
+		"beehive":
+			var straw := Color("#d9a441")
+			for k in 4:
+				var r := s * (0.19 - k * 0.035)
+				ellipse(ci, Vector2(x, by - s * 0.04 - k * s * 0.07), r, s * 0.06, straw.darkened(0.08 * (k % 2)))
+			ellipse(ci, Vector2(x, by - s * 0.3), s * 0.06, s * 0.05, straw.lightened(0.1))
+			ci.draw_circle(Vector2(x, by - s * 0.05), s * 0.035, Color("#3a2420"))
+			for k in 3:
+				var bp := Vector2(x + s * (0.2 + 0.05 * k), by - s * (0.3 - 0.08 * k))
+				ci.draw_circle(bp, s * 0.022, Color("#f2c14e"))
+				ci.draw_line(bp - Vector2(s * 0.015, 0), bp + Vector2(s * 0.015, 0), Color("#2a2a2a"), 1.0, true)
+		"stones":
+			var grey := Color("#8d9196")
+			var shapes := [[-0.17, 0.3, 0.07], [0.0, 0.44, 0.08], [0.17, 0.34, 0.07]]
+			for sh in shapes:
+				var cx: float = x + s * sh[0]
+				var hh: float = s * sh[1]
+				var ww: float = s * sh[2]
+				poly(ci, [Vector2(cx - ww, by), Vector2(cx + ww, by), Vector2(cx + ww * 0.8, by - hh), Vector2(cx, by - hh - ww * 0.4), Vector2(cx - ww * 0.8, by - hh)], grey)
+				poly(ci, [Vector2(cx, by), Vector2(cx + ww, by), Vector2(cx + ww * 0.8, by - hh), Vector2(cx, by - hh - ww * 0.4)], Color(0, 0, 0, 0.18))
+				ci.draw_line(Vector2(cx - ww * 0.4, by - hh * 0.6), Vector2(cx - ww * 0.1, by - hh * 0.45), Color("#6b8f5a"), 1.4, true)
 
 
 ## Windmill sails around `c`, radius r, angle a.
@@ -524,7 +617,7 @@ static func draw_tile(ci: CanvasItem, tile: Tile) -> void:
 				structure(ci, tile.special, 0, 0, s)
 			"station":
 				station(ci, 0, 0, s)
-	if tile.special != "" and tile.special != "belltower":
+	if Defs.special_kind(tile.special) == "ray" and tile.special != "belltower":
 		ray_arrows(ci, tile, s)
 	if tile.gold:
 		# outlined stars so they read on any land

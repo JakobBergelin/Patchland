@@ -1,0 +1,510 @@
+[gd_resource type="Resource" script_class="ContentDB" format=3]
+
+[ext_resource type="Script" path="res://data/defs/relic_def.gd" id="1_6y8sp"]
+[ext_resource type="Script" path="res://data/defs/content_db.gd" id="2_spjg6"]
+[ext_resource type="Script" path="res://data/defs/special_def.gd" id="3_3d6u0"]
+
+[sub_resource type="Resource" id="Resource_javor"]
+script = ExtResource("1_6y8sp")
+id = "saw"
+name = "Sawmill"
+terrain = "forest"
+desc = "Forest edges give +4 yield."
+starter = true
+
+[sub_resource type="Resource" id="Resource_u4eu3"]
+script = ExtResource("1_6y8sp")
+id = "falu"
+name = "Falu paint"
+terrain = "village"
+desc = "Village edges give +8 yield."
+starter = true
+
+[sub_resource type="Resource" id="Resource_in0xn"]
+script = ExtResource("1_6y8sp")
+id = "mill"
+name = "Watermill"
+terrain = "water"
+desc = "Each matched water edge adds +1 multiplier."
+starter = true
+
+[sub_resource type="Resource" id="Resource_xniqh"]
+script = ExtResource("1_6y8sp")
+id = "harvest"
+name = "Harvest fair"
+terrain = "field"
+desc = "+3 multiplier when a field edge matches."
+starter = true
+
+[sub_resource type="Resource" id="Resource_kd6ib"]
+script = ExtResource("1_6y8sp")
+id = "carto"
+name = "Cartographer"
+desc = "+2 tiles every round."
+starter = true
+
+[sub_resource type="Resource" id="Resource_n47e8"]
+script = ExtResource("1_6y8sp")
+id = "second"
+name = "Second thoughts"
+terrain = "water"
+desc = "+2 redraws every round."
+starter = true
+
+[sub_resource type="Resource" id="Resource_eev1l"]
+script = ExtResource("1_6y8sp")
+id = "mono"
+name = "Monoculture"
+terrain = "forest"
+desc = "+40 yield for tiles with only one kind of land."
+starter = true
+
+[sub_resource type="Resource" id="Resource_0o62o"]
+script = ExtResource("1_6y8sp")
+id = "granary"
+name = "Granary"
+terrain = "field"
+desc = "Field regions give double yield in the harvest."
+starter = true
+
+[sub_resource type="Resource" id="Resource_mghms"]
+script = ExtResource("1_6y8sp")
+id = "compost"
+name = "Compost heap"
+desc = "Each edge that doesn't match still gives +2 yield."
+unlock_stat = "placed"
+unlock_need = 40
+unlock_text = "Place 40 tiles in one run."
+
+[sub_resource type="Resource" id="Resource_n2avo"]
+script = ExtResource("1_6y8sp")
+id = "trellis"
+name = "Trellis"
+terrain = "field"
+desc = "Field and meadow edges match each other."
+unlock_stat = "closed_field_max"
+unlock_need = 8
+unlock_text = "Close a field of 8 or more tiles."
+
+[sub_resource type="Resource" id="Resource_kasfc"]
+script = ExtResource("1_6y8sp")
+id = "hedgerows"
+name = "Hedgerows"
+terrain = "forest"
+desc = "Field and forest edges match each other."
+unlock_stat = "biggest_closed"
+unlock_need = 10
+unlock_text = "Close an area of 10 or more tiles."
+
+[sub_resource type="Resource" id="Resource_bn64r"]
+script = ExtResource("1_6y8sp")
+id = "herald"
+name = "Herald"
+terrain = "village"
+desc = "Boss rounds give 3 extra tiles."
+unlock_stat = "bosses_beaten"
+unlock_need = 2
+unlock_text = "Beat 2 boss rounds in one run."
+
+[sub_resource type="Resource" id="Resource_tyhnd"]
+script = ExtResource("1_6y8sp")
+id = "wild"
+name = "Open meadow"
+desc = "Meadow edges match any land."
+rarity = 1
+unlock_stat = "closed_meadow_max"
+unlock_need = 5
+unlock_text = "Close a meadow of 5 or more tiles."
+
+[sub_resource type="Resource" id="Resource_4gjb7"]
+script = ExtResource("1_6y8sp")
+id = "ferry"
+name = "Ferryman"
+terrain = "water"
+desc = "Water and village edges match each other."
+rarity = 1
+unlock_stat = "rails_closed"
+unlock_need = 1
+unlock_text = "Close a railroad between stations."
+
+[sub_resource type="Resource" id="Resource_acf6y"]
+script = ExtResource("1_6y8sp")
+id = "patch"
+name = "Patchwork"
+desc = "+4 multiplier when you match 3 or more kinds of land at once."
+rarity = 1
+unlock_stat = "biggest_closed"
+unlock_need = 6
+unlock_text = "Close an area of 6 or more tiles."
+
+[sub_resource type="Resource" id="Resource_lvnhj"]
+script = ExtResource("1_6y8sp")
+id = "almanac"
+name = "Almanac"
+terrain = "field"
+desc = "Gains +1 multiplier for every Perfect placement. Also counts in the harvest."
+rarity = 1
+unlock_stat = "perfects"
+unlock_need = 12
+unlock_text = "Make 12 Perfect placements in one run."
+
+[sub_resource type="Resource" id="Resource_d1hif"]
+script = ExtResource("1_6y8sp")
+id = "surveyor"
+name = "Surveyor"
+terrain = "field"
+desc = "Quests also give +3 multiplier to your next placement."
+rarity = 1
+unlock_stat = "quests"
+unlock_need = 3
+unlock_text = "Complete 3 quests in one run."
+
+[sub_resource type="Resource" id="Resource_u3p84"]
+script = ExtResource("1_6y8sp")
+id = "goldsmith"
+name = "Goldsmith"
+terrain = "village"
+desc = "Golden tiles show up three times as often."
+rarity = 1
+unlock_stat = "gold_perfects"
+unlock_need = 1
+unlock_text = "Get a Perfect with a golden tile."
+
+[sub_resource type="Resource" id="Resource_432ba"]
+script = ExtResource("1_6y8sp")
+id = "oak"
+name = "Old oak"
+terrain = "forest"
+desc = "Forest regions of 6+ tiles give +3 multiplier in the harvest."
+rarity = 1
+unlock_stat = "closed_forest_max"
+unlock_need = 8
+unlock_text = "Close a forest of 8 or more tiles."
+
+[sub_resource type="Resource" id="Resource_o7v6r"]
+script = ExtResource("1_6y8sp")
+id = "keeper"
+name = "Lamplighter"
+terrain = "water"
+desc = "Each special tile that fires adds +2 multiplier instead of +1."
+rarity = 1
+unlock_stat = "chains"
+unlock_need = 1
+unlock_text = "Set off a ray chain: a special tile's ray hits another special tile."
+
+[sub_resource type="Resource" id="Resource_6palx"]
+script = ExtResource("1_6y8sp")
+id = "rope"
+name = "Bell rope"
+terrain = "village"
+desc = "Bell towers also ring tiles 2 steps away."
+rarity = 1
+unlock_stat = "bosses_beaten"
+unlock_need = 1
+unlock_text = "Beat a boss round."
+
+[sub_resource type="Resource" id="Resource_67w15"]
+script = ExtResource("1_6y8sp")
+id = "railway"
+name = "Railway company"
+terrain = "village"
+desc = "Closing a railroad pays three times the bonus."
+rarity = 1
+unlock_stat = "rails_closed"
+unlock_need = 2
+unlock_text = "Close 2 railroads in one run."
+
+[sub_resource type="Resource" id="Resource_jxuyc"]
+script = ExtResource("1_6y8sp")
+id = "pilot"
+name = "River pilot"
+terrain = "water"
+desc = "Closing a river pays three times the bonus."
+rarity = 1
+unlock_stat = "rivers_closed"
+unlock_need = 2
+unlock_text = "Close 2 rivers in one run."
+
+[sub_resource type="Resource" id="Resource_oa6es"]
+script = ExtResource("1_6y8sp")
+id = "fence"
+name = "Fence builder"
+terrain = "field"
+desc = "Closing an area pays double the bonus."
+rarity = 1
+unlock_stat = "regions_closed"
+unlock_need = 8
+unlock_text = "Close 8 areas in one run."
+
+[sub_resource type="Resource" id="Resource_cpe6o"]
+script = ExtResource("1_6y8sp")
+id = "fishing"
+name = "Fishing village"
+terrain = "water"
+desc = "+1 multiplier in every harvest for each river you've closed this run."
+rarity = 1
+unlock_stat = "rivers_closed"
+unlock_need = 4
+unlock_text = "Close 4 rivers in one run."
+
+[sub_resource type="Resource" id="Resource_in22b"]
+script = ExtResource("1_6y8sp")
+id = "junction"
+name = "Junction"
+terrain = "village"
+desc = "+1 multiplier in every harvest for each railroad you've closed this run."
+rarity = 1
+unlock_stat = "rails_closed"
+unlock_need = 3
+unlock_text = "Close 3 railroads in one run."
+
+[sub_resource type="Resource" id="Resource_uux46"]
+script = ExtResource("1_6y8sp")
+id = "clover"
+name = "Lucky clover"
+desc = "Golden tiles give ×3 instead of ×2."
+rarity = 1
+unlock_stat = "gold_perfects"
+unlock_need = 2
+unlock_text = "Get 2 Perfects with golden tiles in one run."
+
+[sub_resource type="Resource" id="Resource_7fyvc"]
+script = ExtResource("1_6y8sp")
+id = "prospector"
+name = "Prospector"
+terrain = "field"
+desc = "Every quest you complete adds +1 multiplier to all your placements for the rest of the run."
+rarity = 1
+unlock_stat = "quests"
+unlock_need = 5
+unlock_text = "Complete 5 quests in one run."
+
+[sub_resource type="Resource" id="Resource_xcaji"]
+script = ExtResource("1_6y8sp")
+id = "momentum"
+name = "Momentum"
+terrain = "field"
+desc = "Your Perfect streak adds twice as much multiplier."
+rarity = 1
+unlock_stat = "best_streak"
+unlock_need = 6
+unlock_text = "Make a streak of 6 Perfects."
+
+[sub_resource type="Resource" id="Resource_fet0e"]
+script = ExtResource("1_6y8sp")
+id = "plumb"
+name = "Plumb line"
+terrain = "village"
+desc = "Perfect placements give ×3 multiplier instead of ×2."
+rarity = 2
+unlock_stat = "best_streak"
+unlock_need = 4
+unlock_text = "Make a streak of 4 Perfect placements."
+
+[sub_resource type="Resource" id="Resource_uu2h6"]
+script = ExtResource("1_6y8sp")
+id = "miller"
+name = "Miller"
+terrain = "field"
+desc = "Windmills fire twice."
+rarity = 2
+unlock_stat = "best_harvest"
+unlock_need = 20000
+unlock_text = "Score 20,000 or more in one harvest."
+
+[sub_resource type="Resource" id="Resource_0ng1q"]
+script = ExtResource("1_6y8sp")
+id = "architect"
+name = "Architect"
+desc = "Special tiles show up twice as often."
+rarity = 2
+unlock_stat = "rounds_cleared"
+unlock_need = 8
+unlock_text = "Clear all 8 rounds."
+
+[sub_resource type="Resource" id="Resource_irqkh"]
+script = ExtResource("1_6y8sp")
+id = "jeweler"
+name = "Jeweler"
+terrain = "village"
+desc = "In the harvest, +2 multiplier for every golden tile on your land."
+rarity = 2
+unlock_stat = "golds_placed"
+unlock_need = 6
+unlock_text = "Place 6 golden tiles in one run."
+
+[sub_resource type="Resource" id="Resource_iqnwb"]
+script = ExtResource("1_6y8sp")
+id = "bellows"
+name = "Bellows"
+terrain = "village"
+desc = "Rays reach 1 tile further."
+rarity = 2
+unlock_stat = "chains"
+unlock_need = 3
+unlock_text = "Set off 3 ray chains in one run."
+
+[sub_resource type="Resource" id="Resource_adqjg"]
+script = ExtResource("1_6y8sp")
+id = "stonemason"
+name = "Stonemason"
+terrain = "village"
+desc = "Landmarks triple their area's yield instead of doubling it."
+rarity = 2
+unlock_stat = "landmark_harvests"
+unlock_need = 3
+unlock_text = "Score 3 landmark areas in harvests in one run."
+
+[sub_resource type="Resource" id="Resource_6g7xa"]
+script = ExtResource("1_6y8sp")
+id = "pathfinder"
+name = "Pathfinder"
+desc = "+1 tile every round for each area of 6+ tiles you've closed this run (up to +3)."
+rarity = 2
+unlock_stat = "rounds_cleared"
+unlock_need = 5
+unlock_text = "Clear round 5."
+
+[sub_resource type="Resource" id="Resource_l0sn3"]
+script = ExtResource("1_6y8sp")
+id = "oldmaps"
+name = "Old maps"
+desc = "The first tile of every round is a special tile."
+rarity = 2
+unlock_stat = "specials_placed"
+unlock_need = 10
+unlock_text = "Place 10 special tiles in one run."
+
+[sub_resource type="Resource" id="Resource_v72nw"]
+script = ExtResource("1_6y8sp")
+id = "abundance"
+name = "Abundance"
+terrain = "field"
+desc = "Regions of 10 or more tiles give +5 multiplier in the harvest."
+rarity = 2
+unlock_stat = "biggest_region"
+unlock_need = 15
+unlock_text = "Score a region of 15 or more tiles in a harvest."
+
+[sub_resource type="Resource" id="Resource_brh46"]
+script = ExtResource("3_3d6u0")
+id = "windmill"
+name = "Windmill"
+desc = "Fires 3 rays, each 3 tiles long."
+dirs = PackedInt32Array(0, 2, 4)
+length = 3
+unlock_stat = "rounds_cleared"
+unlock_need = 1
+unlock_text = "Clear your first round."
+
+[sub_resource type="Resource" id="Resource_t6c0w"]
+script = ExtResource("3_3d6u0")
+id = "lighthouse"
+name = "Lighthouse"
+desc = "Fires 1 ray the way it faces, all the way to the edge of your land."
+dirs = PackedInt32Array(0)
+length = 99
+unlock_stat = "rivers_closed"
+unlock_need = 1
+unlock_text = "Close a river: water at both ends and no open end."
+
+[sub_resource type="Resource" id="Resource_cbrcj"]
+script = ExtResource("3_3d6u0")
+id = "belltower"
+name = "Bell tower"
+desc = "Rings all 6 neighbors."
+dirs = PackedInt32Array(0, 1, 2, 3, 4, 5)
+length = 1
+unlock_stat = "rounds_cleared"
+unlock_need = 3
+unlock_text = "Clear round 3."
+
+[sub_resource type="Resource" id="Resource_ks6ko"]
+script = ExtResource("3_3d6u0")
+id = "crossroads"
+name = "Crossroads"
+desc = "All six edges match any land."
+kind = "wild"
+dirs = PackedInt32Array()
+unlock_stat = "big_perfects"
+unlock_need = 1
+unlock_text = "Get a Perfect with 5 or more neighbors."
+
+[sub_resource type="Resource" id="Resource_ec5ew"]
+script = ExtResource("3_3d6u0")
+id = "scarecrow"
+name = "Scarecrow"
+desc = "The field area it stands in scores double yield in the harvest."
+kind = "landmark"
+dirs = PackedInt32Array()
+terrain = "field"
+unlock_stat = "closed_field_max"
+unlock_need = 6
+unlock_text = "Close a field of 6 or more tiles."
+
+[sub_resource type="Resource" id="Resource_ev121"]
+script = ExtResource("3_3d6u0")
+id = "dam"
+name = "Dam"
+desc = "The water area it stands in scores double yield in the harvest."
+kind = "landmark"
+dirs = PackedInt32Array()
+terrain = "water"
+unlock_stat = "rivers_closed"
+unlock_need = 3
+unlock_text = "Close 3 rivers in one run."
+
+[sub_resource type="Resource" id="Resource_wfk0g"]
+script = ExtResource("3_3d6u0")
+id = "market"
+name = "Market"
+desc = "The village area it stands in scores double yield in the harvest."
+kind = "landmark"
+dirs = PackedInt32Array()
+terrain = "village"
+unlock_stat = "closed_village_max"
+unlock_need = 5
+unlock_text = "Close a village area of 5 or more tiles."
+
+[sub_resource type="Resource" id="Resource_pg478"]
+script = ExtResource("3_3d6u0")
+id = "lodge"
+name = "Hunting lodge"
+desc = "The forest area it stands in scores double yield in the harvest."
+kind = "landmark"
+dirs = PackedInt32Array()
+terrain = "forest"
+unlock_stat = "closed_forest_max"
+unlock_need = 6
+unlock_text = "Close a forest of 6 or more tiles."
+
+[sub_resource type="Resource" id="Resource_3mr8u"]
+script = ExtResource("3_3d6u0")
+id = "beehive"
+name = "Beehive"
+desc = "The meadow area it stands in scores double yield in the harvest."
+kind = "landmark"
+dirs = PackedInt32Array()
+terrain = "meadow"
+unlock_stat = "quests"
+unlock_need = 2
+unlock_text = "Complete 2 quests in one run."
+
+[sub_resource type="Resource" id="Resource_4b6fe"]
+script = ExtResource("3_3d6u0")
+id = "stones"
+name = "Standing stones"
+desc = "In the harvest, adds +1 multiplier for every special tile on your land."
+kind = "stones"
+dirs = PackedInt32Array()
+unlock_stat = "specials_placed"
+unlock_need = 6
+unlock_text = "Place 6 special tiles in one run."
+
+[resource]
+script = ExtResource("2_spjg6")
+specials = Array[ExtResource("3_3d6u0")]([SubResource("Resource_brh46"), SubResource("Resource_t6c0w"), SubResource("Resource_cbrcj"), SubResource("Resource_ks6ko"), SubResource("Resource_ec5ew"), SubResource("Resource_ev121"), SubResource("Resource_wfk0g"), SubResource("Resource_pg478"), SubResource("Resource_3mr8u"), SubResource("Resource_4b6fe")])
+relics = Array[ExtResource("1_6y8sp")]([SubResource("Resource_javor"), SubResource("Resource_u4eu3"), SubResource("Resource_in0xn"), SubResource("Resource_xniqh"), SubResource("Resource_kd6ib"), SubResource("Resource_n47e8"), SubResource("Resource_eev1l"), SubResource("Resource_0o62o"), SubResource("Resource_mghms"), SubResource("Resource_n2avo"), SubResource("Resource_kasfc"), SubResource("Resource_bn64r"), SubResource("Resource_tyhnd"), SubResource("Resource_4gjb7"), SubResource("Resource_acf6y"), SubResource("Resource_lvnhj"), SubResource("Resource_d1hif"), SubResource("Resource_u3p84"), SubResource("Resource_432ba"), SubResource("Resource_o7v6r"), SubResource("Resource_6palx"), SubResource("Resource_67w15"), SubResource("Resource_jxuyc"), SubResource("Resource_oa6es"), SubResource("Resource_cpe6o"), SubResource("Resource_in22b"), SubResource("Resource_uux46"), SubResource("Resource_7fyvc"), SubResource("Resource_xcaji"), SubResource("Resource_fet0e"), SubResource("Resource_uu2h6"), SubResource("Resource_0ng1q"), SubResource("Resource_irqkh"), SubResource("Resource_iqnwb"), SubResource("Resource_adqjg"), SubResource("Resource_6g7xa"), SubResource("Resource_l0sn3"), SubResource("Resource_v72nw")])
+goals = PackedInt32Array(500, 3200, 9500, 30000, 66000, 120000, 240000, 340000)
+season_goal_scale = PackedFloat32Array(1, 1.2, 1.4, 1.65, 1.95)
+rarity_weights = PackedFloat32Array(6, 3, 1)
