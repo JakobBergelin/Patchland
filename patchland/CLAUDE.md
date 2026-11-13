@@ -46,6 +46,12 @@ Patchland is a hex tile-placement roguelite: lay tiles so their edges match the 
 6. Steam (GodotSteam), achievements.
 
 - The tray shows the current tile plus the next two (`RunState.nxt`, `nxt2`); the Fog boss hides both.
+## Menus, tutorial and scoreboard
+- Launch opens the **main menu** (Play, Tutorial, Scoreboard, How to play, Quit). Esc or the HUD ≡ button opens it as a pause menu during a run (Continue / New run). First-time players (no `tutorial_done` setting) get the Tutorial suggested.
+- **Tutorial** (`ui/tutorial.gd`): a guided first round with a fixed seed, goal `Tutorial.GOAL` and `Tutorial.TILES` tiles (`RunState.goal_override`). Steps advance on events Game reports via `_tut(event)` ("hover", "rotate", "place") or a Next button; the callout lives in the top-left of the board. It ends after the harvest, with no relic draft and no scoreboard entry.
+- **Scoreboard** (`core/scores.gd`): the top 10 finished runs (score, rounds reached, won, relics, date) in the settings file, section `scores`. The best run shown in menus is its top entry. The end-of-run sheet shows the rank.
+- The **? button** opens the rules sheet (`show_rules`); Back returns to where it was opened from (`overlay_back`).
+
 ## Controls
 Hover a dashed slot to preview, left click places. **Right click rotates the tile clockwise** (shift + right click: counter-clockwise), on the board or on the tray tile. Ctrl + scroll, R/E/Q, the Rotate button and clicking (or scrolling on) the tray tile also rotate. X redraws, arrows cycle slots, Enter/Space places, M mutes. Clicking during the harvest speeds it up.
 
@@ -66,6 +72,8 @@ Run headless from the project folder, for example:
 (on Windows, use the `_console.exe` build of Godot so output prints to the terminal). Run the simulation after any balance or rules change. A run takes ~30 s.
 
 Rivers/railroads rule checks: `godot --headless --path . -s res://tests/features.gd` (add `-- <output folder>` without `--headless` to also save screenshots of a blocked and a legal spot). Run after any change to lines, dealing or scoring.
+
+Menus test (needs a window): `godot --path . -s res://tests/menus.gd -- <output folder>` walks the main menu, the whole tutorial, a real run with Esc pause, the rules sheet and the scoreboard (23 checks, own settings file).
 
 Visual smoke test (needs a window, not `--headless`): `godot --path . -s res://tests/screenshot.gd -- <output folder>` plays the opening, right-clicks to rotate (prints the rotation change), zooms and pans the camera, toggles fullscreen on and back, finishes round 1 and saves PNGs of each stage.
 

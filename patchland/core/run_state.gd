@@ -40,7 +40,12 @@ func has_relic(id: String) -> bool:
 	return relics.has(id)
 
 
+var goal_override := 0  # the tutorial uses a fixed, easy goal
+
+
 func goal() -> int:
+	if goal_override > 0:
+		return goal_override
 	return Defs.GOALS[round_idx]
 
 

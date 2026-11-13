@@ -14,6 +14,14 @@ var cur_eval = null
 var calc_hold = null
 var shown := 0
 var started := false
+var run_active := false  # a run (or the tutorial) is in progress; the menu offers Continue
+var tut: Tutorial = null  # set while the tutorial runs
+var tut_hidden := false
+var overlay_kind := ""  # "menu", "rules", "scores", "draft", "end"
+var overlay_back := "board"  # where Back returns from rules/scoreboard
+var last_rank := 0  # scoreboard rank of the run that just ended (0 = none)
+var _end_title := ""
+var _end_body := ""
 var harvesting := false
 var hl_region = null  # {t, keys: Array[Vector2i]}
 var reduced := false
@@ -66,6 +74,11 @@ var hud_m: MarginContainer
 var rel_m: MarginContainer
 var tray_m: MarginContainer
 var fs_icon: IconView
+var tut_panel: PanelContainer
+var tut_title: Label
+var tut_text: Label
+var tut_next: Button
+var tut_wait: Label
 const CONTENT_W := 1180.0
 
 
@@ -91,7 +104,7 @@ func _ready() -> void:
 	resized.connect(_layout)
 	_layout()
 	new_run()
-	show_intro()
+	show_main_menu()
 
 
 func _load_settings() -> void:
@@ -109,16 +122,16 @@ func _save_setting(key: String, value) -> void:
 	cfg.save(settings_path)
 
 
-func get_best() -> int:
+func _get_setting(key: String, default):
 	var cfg := ConfigFile.new()
 	if cfg.load(settings_path) == OK:
-		return cfg.get_value("game", "best", 0)
-	return 0
+		return cfg.get_value("game", key, default)
+	return default
 
 
-func save_best(n: int) -> void:
-	if n > get_best():
-		_save_setting("best", n)
+## Best run = top of the scoreboard.
+func get_best() -> int:
+	return Scores.best(settings_path)
 
 
 ## The board uses the whole window; the HUD, relic strip and tray stay a readable
@@ -318,10 +331,17 @@ func _build_ui() -> void:
 	var fs_wrap := CenterContainer.new()
 	fs_wrap.add_child(fs_btn)
 	hud.add_child(fs_wrap)
+	var menu_btn := _icon_btn()
+	menu_btn.text = "≡"
+	menu_btn.tooltip_text = "Menu (Esc)"
+	menu_btn.pressed.connect(func(): if not harvesting: show_main_menu())
+	var mn_wrap := CenterContainer.new()
+	mn_wrap.add_child(menu_btn)
+	hud.add_child(mn_wrap)
 	var help_btn := _icon_btn()
 	help_btn.text = "?"
 	help_btn.tooltip_text = "How to play"
-	help_btn.pressed.connect(show_intro)
+	help_btn.pressed.connect(show_rules.bind("board"))
 	var hb_wrap := CenterContainer.new()
 	hb_wrap.add_child(help_btn)
 	hud.add_child(hb_wrap)
@@ -377,6 +397,41 @@ func _build_ui() -> void:
 	toast_panel.add_child(toast_lbl)
 	toast_panel.modulate.a = 0
 	board.add_child(toast_panel)
+
+	# tutorial callout, top-left of the board
+	tut_panel = PanelContainer.new()
+	var tsb := _sb(Pal.panel, 14, Pal.gold, 2, Vector4(16, 12, 16, 12))
+	tsb.shadow_color = Color(0, 0, 0, 0.3)
+	tsb.shadow_size = 12
+	tut_panel.add_theme_stylebox_override("panel", tsb)
+	tut_panel.position = Vector2(16, 14)
+	tut_panel.visible = false
+	var tv := VBoxContainer.new()
+	tv.add_theme_constant_override("separation", 8)
+	tut_title = _lbl("", 17, Pal.gold, true)
+	tv.add_child(tut_title)
+	tut_text = _para("", 15, Pal.ink, 360)
+	tv.add_child(tut_text)
+	var trow := HBoxContainer.new()
+	trow.add_theme_constant_override("separation", 8)
+	tut_next = _btn("Next", true)
+	tut_next.custom_minimum_size = Vector2(96, 38)
+	tut_next.pressed.connect(_tut_next)
+	trow.add_child(tut_next)
+	tut_wait = _lbl("Do it on the board to continue", 14, Pal.soft)
+	tut_wait.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	trow.add_child(tut_wait)
+	var tspacer := Control.new()
+	tspacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	trow.add_child(tspacer)
+	var tskip := _btn("Skip tutorial")
+	tskip.custom_minimum_size = Vector2(0, 38)
+	tskip.add_theme_font_size_override("font_size", 14)
+	tskip.pressed.connect(_tut_skip)
+	trow.add_child(tskip)
+	tv.add_child(trow)
+	tut_panel.add_child(tv)
+	board.add_child(tut_panel)
 
 	# --- tray ---
 	var tray := PanelContainer.new()
@@ -598,14 +653,24 @@ func _process(dt: float) -> void:
 # run flow
 # ======================================================================
 
-func new_run() -> void:
+## Starts a run. `tutorial` uses a fixed seed, an easy goal and fewer tiles,
+## and shows the guided callouts.
+func new_run(seed_val := -1, tutorial := false) -> void:
 	_seq.clear()
 	_steps.clear()
 	harvesting = false
 	hl_region = null
 	board.clear_tiles()
 	S = RunState.new()
-	S.new_run()
+	S.new_run(seed_val)
+	tut = null
+	tut_hidden = false
+	last_rank = 0
+	if tutorial:
+		tut = Tutorial.new()
+		S.goal_override = Tutorial.GOAL
+		S.tiles_left = Tutorial.TILES
+	render_tutorial()
 	board.sync_tiles(S.board)
 	_after_start_round()
 	board.snap_cam = true
@@ -645,6 +710,7 @@ func place() -> void:
 	var res := S.place(q, r)
 	if res.is_empty():
 		return
+	_tut("place")
 	var entry: Dictionary = res.entry
 	var ev: Dictionary = res.ev
 	var events: Array = res.events
@@ -977,6 +1043,7 @@ func rotate(dir: int) -> void:
 	_spin(cur_view, dir)
 	refresh_eval()
 	draw_previews()
+	_tut("rotate")
 
 
 func redraw() -> void:
@@ -997,6 +1064,8 @@ func set_sel(h, force := false, audible := false) -> void:
 		if audible:
 			sfx.select()
 	refresh_eval()
+	if h != null:
+		_tut("hover")
 
 
 func refresh_eval() -> void:
@@ -1356,6 +1425,23 @@ func _input(event: InputEvent) -> void:
 		if event.keycode == KEY_F11 or (event.keycode == KEY_ENTER and event.alt_pressed):
 			toggle_fullscreen()
 			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_ESCAPE:
+			_on_escape()
+			get_viewport().set_input_as_handled()
+
+
+## Esc: open the menu during play; on a sub-screen go back; in the pause menu resume.
+func _on_escape() -> void:
+	if not overlay.visible:
+		if run_active and not harvesting:
+			show_main_menu()
+		return
+	match overlay_kind:
+		"rules", "scores":
+			_overlay_back()
+		"menu":
+			if run_active:
+				_resume()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -1425,6 +1511,7 @@ func open_overlay() -> void:
 
 func close_overlay() -> void:
 	overlay.visible = false
+	overlay_kind = ""
 	for c in sheet_box.get_children():
 		c.queue_free()
 
@@ -1447,19 +1534,108 @@ func _go_button(text: String, fn: Callable) -> Button:
 	return b
 
 
-func show_intro() -> void:
+
+
+## A row of buttons sharing the sheet width.
+func _button_row(buttons: Array) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	for b in buttons:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(b)
+	return row
+
+
+func _menu_button(text: String, fn: Callable, primary := false) -> Button:
+	var b := _btn(text, primary)
+	b.focus_mode = Control.FOCUS_ALL
+	b.custom_minimum_size.y = 48
+	b.add_theme_font_size_override("font_size", 17)
+	b.pressed.connect(fn)
+	return b
+
+
+func _hero_view(h := 150.0) -> ClusterView:
 	if hero.is_empty():
 		var rng := RandomNumberGenerator.new()
 		rng.randomize()
 		hero = ClusterView.hero_cluster(rng)
-	open_overlay()
-	sheet_box.add_child(_lbl("Patchland", 46, Pal.ink, true))
 	var cv := ClusterView.new()
 	cv.list = hero
-	cv.custom_minimum_size = Vector2(SHEET_W - 44, 150)
-	sheet_box.add_child(cv)
+	cv.custom_minimum_size = Vector2(SHEET_W - 44, h)
+	return cv
+
+
+# ---------- main menu ----------
+
+## Title screen at launch, and the pause menu (Esc) during a run.
+func show_main_menu() -> void:
+	open_overlay()
+	overlay_kind = "menu"
+	sheet_box.add_child(_lbl("Patchland", 46, Pal.ink, true))
+	sheet_box.add_child(_hero_view(140))
+	var first_time: bool = not _get_setting("tutorial_done", false)
+	if run_active:
+		var where := "Tutorial" if tut != null else "Round %d of %d" % [S.round_idx + 1, Defs.ROUNDS]
+		sheet_box.add_child(_para("%s · %s points so far" % [where, Defs.fmt(S.round_score if tut != null else S.total)], 14, Pal.soft))
+		sheet_box.add_child(_menu_button("Continue", _resume, true))
+		sheet_box.add_child(_menu_button("New run", start_play))
+	else:
+		if first_time:
+			sheet_box.add_child(_para("New here? The tutorial walks you through a first round in a couple of minutes.", 14, Pal.soft))
+		sheet_box.add_child(_menu_button("Play", start_play, not first_time))
+	sheet_box.add_child(_menu_button("Tutorial", start_tutorial, first_time and not run_active))
+	sheet_box.add_child(_button_row([
+		_menu_button("Scoreboard", show_scoreboard.bind("menu")),
+		_menu_button("How to play", show_rules.bind("menu")),
+	]))
+	var best := get_best()
+	if best > 0:
+		sheet_box.add_child(_para("Best run: %s points" % Defs.fmt(best), 14, Pal.soft))
+	if OS.get_name() != "Web":
+		sheet_box.add_child(_menu_button("Quit", func(): get_tree().quit()))
+	_focus_first_button()
+
+
+func _resume() -> void:
+	close_overlay()
+
+
+func start_play() -> void:
+	close_overlay()
+	new_run()
+	started = true
+	run_active = true
+	round_banner()
+
+
+func start_tutorial() -> void:
+	close_overlay()
+	new_run(Tutorial.SEED, true)
+	started = true
+	run_active = true
+	show_banner("Tutorial", "Goal %s" % Defs.fmt(S.goal()))
+
+
+func _focus_first_button() -> void:
+	for c in sheet_box.get_children():
+		if c is Button:
+			c.grab_focus.call_deferred()
+			return
+
+
+# ---------- rules sheet (the ? button) ----------
+
+## How to play. `back` is where the Back button returns: "board" or "menu".
+func show_rules(back := "board") -> void:
+	open_overlay()
+	overlay_kind = "rules"
+	overlay_back = back
+	sheet_box.add_child(_lbl("How to play", 34, Pal.ink, true))
+	sheet_box.add_child(_hero_view(130))
 	sheet_box.add_child(_para("Lay hex tiles to grow a patch of countryside. Every edge that matches the land beside it adds its yield and +1 multiplier, and matching every neighbor doubles the multiplier."))
 	sheet_box.add_child(_para("When your tiles run out, the harvest scores every region of linked land on the whole board, and bigger regions raise the multiplier. Your placements plus the harvest must reach the goal."))
+	sheet_box.add_child(_para("Close an area of one land type (no open edge left) for a bonus that grows with its size."))
 	sheet_box.add_child(_para("Windmills, lighthouses and bell towers fire rays that score every tile they hit, and a ray that hits another special tile sets it off too. Golden tiles, quest flags, perfect streaks and boss rounds (3, 6 and 8) add extra twists."))
 	sheet_box.add_child(_para("Rivers and railroads score extra when they link across an edge. Railroads run between stations in cities, rivers flow out of and into water, and you can never place a tile that cuts one. A line that runs end to end scores again in the harvest."))
 	var legend := HFlowContainer.new()
@@ -1481,22 +1657,124 @@ func show_intro() -> void:
 		it.add_child(_lbl(str((Defs.FEAT[t] if Defs.FEAT.has(t) else Defs.TER[t]).chips), 14, Pal.ink, true))
 		legend.add_child(it)
 	sheet_box.add_child(legend)
-	sheet_box.add_child(_para("Rotate by right-clicking (shift + right-click turns the other way), Ctrl + scroll, R / Q, the Rotate button, or by clicking your tile. Redraw swaps your tile for the next one. Scroll to zoom, drag or use WASD to move the view, and press F (or double-click empty ground) to see the whole board again. F11 toggles fullscreen.", 14, Pal.soft))
-	var best := get_best()
-	if best > 0:
-		sheet_box.add_child(_para("Best run: %s points" % Defs.fmt(best), 14, Pal.soft))
-	var b := _go_button("Back to the board" if started else "Start run", func():
-		var first := not started
-		started = true
-		close_overlay()
-		if first:
-			round_banner())
-	sheet_box.add_child(b)
-	b.grab_focus.call_deferred()
+	sheet_box.add_child(_para("Rotate by right-clicking (shift + right-click turns the other way), Ctrl + scroll, R / Q, the Rotate button, or by clicking your tile. Redraw swaps your tile for the next one. Scroll to zoom, drag or use WASD to move the view, and press F (or double-click empty ground) to see the whole board again. F11 toggles fullscreen, Esc opens the menu.", 14, Pal.soft))
+	sheet_box.add_child(_menu_button("Back to the board" if back == "board" else "Back", _overlay_back, true))
+	_focus_first_button()
 
+
+## Back from a sub-screen (rules, scoreboard) to wherever it was opened from.
+func _overlay_back() -> void:
+	if overlay_back == "menu":
+		show_main_menu()
+	elif overlay_back == "end":
+		_show_end_again()
+	else:
+		close_overlay()
+
+
+# ---------- scoreboard ----------
+
+func show_scoreboard(back := "menu") -> void:
+	open_overlay()
+	overlay_kind = "scores"
+	overlay_back = back
+	sheet_box.add_child(_lbl("Scoreboard", 34, Pal.ink, true))
+	var list := Scores.load_list(settings_path)
+	if list.is_empty():
+		sheet_box.add_child(_para("No runs yet. Finish a run and it shows up here.", 15, Pal.soft))
+	else:
+		var grid := GridContainer.new()
+		grid.columns = 4
+		grid.add_theme_constant_override("h_separation", 14)
+		grid.add_theme_constant_override("v_separation", 6)
+		for h in ["#", "Score", "Reached", "Date"]:
+			grid.add_child(_lbl(h, 13, Pal.soft, true))
+		for i in list.size():
+			var e: Dictionary = list[i]
+			var hl := i == last_rank - 1 and last_rank > 0
+			var col := Pal.gold if hl else Pal.ink
+			grid.add_child(_lbl(str(i + 1), 16, col, true))
+			var sc := _lbl(Defs.fmt(e.score), 16, col, true)
+			sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			grid.add_child(sc)
+			grid.add_child(_lbl("Won all %d" % Defs.ROUNDS if e.get("won", false) else "Round %d" % (int(e.get("rounds", 0)) + 1), 15, Pal.gold if e.get("won", false) else col))
+			grid.add_child(_lbl(str(e.get("date", "")), 14, Pal.soft))
+		var panel := PanelContainer.new()
+		panel.add_theme_stylebox_override("panel", _sb(Pal.bg2, 12, Color(0, 0, 0, 0), 0, Vector4(14, 10, 14, 10)))
+		panel.add_child(grid)
+		sheet_box.add_child(panel)
+		sheet_box.add_child(_para("Your best %d runs on this computer." % Scores.KEEP, 13, Pal.soft))
+	sheet_box.add_child(_menu_button("Back", _overlay_back, true))
+	_focus_first_button()
+
+
+# ---------- tutorial callout ----------
+
+func _tut(event: String) -> void:
+	if tut != null and tut.notify(event):
+		render_tutorial()
+
+
+func render_tutorial() -> void:
+	tut_panel.visible = tut != null and not tut_hidden
+	if tut == null:
+		return
+	var st: Dictionary = tut.current()
+	tut_title.text = "%s  ·  %d/%d" % [st.title, tut.step + 1, Tutorial.STEPS.size()]
+	tut_text.text = st.text
+	tut_next.visible = st.event == "" or tut.is_last()
+	tut_next.text = "Got it" if tut.is_last() else "Next"
+	tut_wait.visible = st.event != "" and not tut.is_last()
+	tut_panel.reset_size()
+	if not reduced:
+		tut_panel.pivot_offset = tut_panel.size / 2
+		tut_panel.modulate.a = 0.0
+		var tw := _anim(tut_panel, "tut")
+		tw.tween_property(tut_panel, "modulate:a", 1.0, 0.22)
+
+
+func _tut_next() -> void:
+	if tut == null:
+		return
+	if tut.is_last():
+		tut_hidden = true
+		render_tutorial()
+		return
+	tut.next()
+	render_tutorial()
+
+
+func _tut_skip() -> void:
+	_save_setting("tutorial_done", true)
+	tut = null
+	run_active = false
+	render_tutorial()
+	show_main_menu()
+
+
+func show_tutorial_end(cleared: bool) -> void:
+	open_overlay()
+	overlay_kind = "end"
+	run_active = false
+	if cleared:
+		_save_setting("tutorial_done", true)
+	sheet_box.add_child(_lbl("Tutorial complete" if cleared else "Not quite", 30, Pal.ink, true))
+	var body := "You reached %s of %s. In a real run there are %d rounds with rising goals, and after each round you pick a relic that bends the rules in your favor." % [Defs.fmt(S.round_score), Defs.fmt(S.goal()), Defs.ROUNDS] if cleared \
+		else "You reached %s of %s. Try to match more edges and close areas of land, then the harvest has more to score." % [Defs.fmt(S.round_score), Defs.fmt(S.goal())]
+	sheet_box.add_child(_para(body))
+	tut = null
+	render_tutorial()
+	sheet_box.add_child(_menu_button("Play a real run" if cleared else "Try the tutorial again", start_play if cleared else start_tutorial, true))
+	sheet_box.add_child(_menu_button("Main menu", show_main_menu))
+	_focus_first_button()
+
+
+# ---------- rounds and run end ----------
 
 func end_round() -> void:
-	save_best(S.total)
+	if tut != null:
+		show_tutorial_end(true)
+		return
 	if S.is_last_round():
 		win()
 		return
@@ -1518,6 +1796,7 @@ func show_draft(first: bool) -> void:
 		body = "You scored %s against a goal of %s. " % [Defs.fmt(S.round_score), Defs.fmt(S.goal())]
 		body += "Boss rounds pay double, so you get two relics. Pick the first." if S.boss != "" else "Pick a relic to keep for the rest of the run."
 	open_overlay()
+	overlay_kind = "draft"
 	sheet_box.add_child(_lbl(title, 28, Pal.ink, true))
 	sheet_box.add_child(_para(body))
 	var cards := VBoxContainer.new()
@@ -1601,23 +1880,39 @@ func _stats() -> GridContainer:
 	return g
 
 
-func _end_sheet(title: String, body: String) -> void:
-	save_best(S.total)
+## End of a real run: records it on the scoreboard and shows the summary.
+func _end_sheet(title: String, body: String, won: bool) -> void:
+	run_active = false
+	last_rank = Scores.record(settings_path, Scores.make_entry(S, won))
+	_end_title = title
+	_end_body = body
+	_show_end_again()
+
+
+func _show_end_again() -> void:
 	open_overlay()
-	sheet_box.add_child(_lbl(title, 28, Pal.ink, true))
-	sheet_box.add_child(_para(body))
+	overlay_kind = "end"
+	sheet_box.add_child(_lbl(_end_title, 28, Pal.ink, true))
+	if last_rank == 1:
+		sheet_box.add_child(_lbl("New best run!", 20, Pal.gold, true))
+	elif last_rank > 0:
+		sheet_box.add_child(_lbl("#%d on your scoreboard" % last_rank, 18, Pal.gold, true))
+	sheet_box.add_child(_para(_end_body))
 	sheet_box.add_child(_stats())
-	sheet_box.add_child(_para("Best run: %s points" % Defs.fmt(get_best()), 14, Pal.soft))
-	var b := _go_button("New run", func():
-		close_overlay()
-		new_run())
-	sheet_box.add_child(b)
-	b.grab_focus.call_deferred()
+	sheet_box.add_child(_menu_button("New run", start_play, true))
+	sheet_box.add_child(_button_row([
+		_menu_button("Scoreboard", show_scoreboard.bind("end")),
+		_menu_button("Main menu", show_main_menu),
+	]))
+	_focus_first_button()
 
 
 func game_over() -> void:
-	_end_sheet("The harvest came up short", "Round %d ended at %s of %s. Your run scored %s points in total." % [S.round_idx + 1, Defs.fmt(S.round_score), Defs.fmt(S.goal()), Defs.fmt(S.total)])
+	if tut != null:
+		show_tutorial_end(false)
+		return
+	_end_sheet("The harvest came up short", "Round %d ended at %s of %s. Your run scored %s points in total." % [S.round_idx + 1, Defs.fmt(S.round_score), Defs.fmt(S.goal()), Defs.fmt(S.total)], false)
 
 
 func win() -> void:
-	_end_sheet("All 8 rounds cleared", "Your countryside held up. The run scored %s points with %d relics." % [Defs.fmt(S.total), S.relics.size()])
+	_end_sheet("All 8 rounds cleared", "Your countryside held up. The run scored %s points with %d relics." % [Defs.fmt(S.total), S.relics.size()], true)
