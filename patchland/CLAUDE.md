@@ -52,6 +52,14 @@ Patchland is a hex tile-placement roguelite: lay tiles so their edges match the 
 - **Scoreboard** (`core/scores.gd`): the top 10 finished runs (score, rounds reached, won, relics, date) in the settings file, section `scores`. The best run shown in menus is its top entry. The end-of-run sheet shows the rank.
 - The **? button** opens the rules sheet (`show_rules`); Back returns to where it was opened from (`overlay_back`).
 
+## Unlocks and collection
+- Special tiles and 12 of the 20 relics are locked at first and unlock through achievements (`core/unlocks.gd`, `Unlocks.LIST`: each checks one RunState stat against a threshold, e.g. Windmill = clear round 1, Lighthouse = close a river, Bell tower = clear round 3). The 8 `STARTER_RELICS` are always available. Unlocked ids are saved in the settings file (section `unlocks`).
+- `RunState.allowed_specials` / `allowed_relics` limit what `Tile.make` deals and what `draft_pool` offers. They default to everything (sims, tests, test runs); Game sets them from the player's unlocks before `new_run()`.
+- Game calls `_check_unlocks()` after each placement, at round end (after `RunState.mark_cleared()`) and on game over; new unlocks join the current run at once and show a toast and on the end sheet. The tutorial and test runs never unlock anything.
+- **Collection** (main menu): every special tile and relic; locked ones are black silhouettes with how to unlock them, unlocked ones say what they do.
+- **Test run** switch in the main menu: the next run has everything unlocked and records no score or achievements (`Game.test_run`, per run `run_is_test`).
+- The bots in `run_sim.gd` play with everything unlocked, so the balance numbers describe an experienced player.
+
 ## Controls
 Hover a dashed slot to preview, left click places. **Right click rotates the tile clockwise** (shift + right click: counter-clockwise), on the board or on the tray tile. Ctrl + scroll, R/E/Q, the Rotate button and clicking (or scrolling on) the tray tile also rotate. X redraws, arrows cycle slots, Enter/Space places, M mutes. Clicking during the harvest speeds it up.
 
@@ -73,7 +81,9 @@ Run headless from the project folder, for example:
 
 Rivers/railroads rule checks: `godot --headless --path . -s res://tests/features.gd` (add `-- <output folder>` without `--headless` to also save screenshots of a blocked and a legal spot). Run after any change to lines, dealing or scoring.
 
-Menus test (needs a window): `godot --path . -s res://tests/menus.gd -- <output folder>` walks the main menu, the whole tutorial, a real run with Esc pause, the rules sheet and the scoreboard (23 checks, own settings file).
+Menus test (needs a window): `godot --path . -s res://tests/menus.gd -- <output folder>` walks the main menu, the whole tutorial, a real run with Esc pause, the rules sheet, the scoreboard, unlocking, the Collection and a test run (own settings file).
+
+Unlock rules (headless): `godot --headless --path . -s res://tests/unlocks.gd`.
 
 Visual smoke test (needs a window, not `--headless`): `godot --path . -s res://tests/screenshot.gd -- <output folder>` plays the opening, right-clicks to rotate (prints the rotation change), zooms and pans the camera, toggles fullscreen on and back, finishes round 1 and saves PNGs of each stage.
 

@@ -20,6 +20,19 @@ var quests := 0
 var lines_closed := 0
 var regions_closed := 0
 var biggest_closed := 0
+# stats read by achievements (core/unlocks.gd)
+var rounds_cleared := 0
+var bosses_beaten := 0
+var rivers_closed := 0
+var rails_closed := 0
+var closed_forest_max := 0
+var closed_meadow_max := 0
+var gold_perfects := 0
+var chains := 0
+## Special tiles and relics this run may deal / offer. Default: everything (sims,
+## tests, test runs); Game narrows them to the player's unlocks before new_run().
+var allowed_specials: Array = Defs.SKEYS.duplicate()
+var allowed_relics: Array = Defs.RELICS.map(func(r): return r.id)
 var perfects := 0
 var best_harvest := 0
 var survey_bonus := 0
@@ -50,7 +63,7 @@ func goal() -> int:
 
 
 func make_tile(min_kinds := 0, plain := false) -> Tile:
-	return Tile.make(rng, min_kinds, plain, relics, round_idx, {"river": has_open("river") or has_open_water(), "rail": has_open("rail")})
+	return Tile.make(rng, min_kinds, plain, relics, round_idx, {"river": has_open("river") or has_open_water(), "rail": has_open("rail")}, allowed_specials)
 
 
 ## True if some edge of feature `f` on the board faces an empty spot (a line is open).
@@ -93,6 +106,14 @@ func new_run(seed_val := -1) -> void:
 	quests = 0
 	lines_closed = 0
 	regions_closed = 0
+	rounds_cleared = 0
+	bosses_beaten = 0
+	rivers_closed = 0
+	rails_closed = 0
+	closed_forest_max = 0
+	closed_meadow_max = 0
+	gold_perfects = 0
+	chains = 0
 	biggest_closed = 0
 	perfects = 0
 	best_harvest = 0
@@ -187,6 +208,10 @@ func finish_placement(entry: Dictionary, ev: Dictionary) -> Dictionary:
 		round_score += bonus
 		total += bonus
 		lines_closed += 1
+		if net.f == "river":
+			rivers_closed += 1
+		else:
+			rails_closed += 1
 		res.lines.append({"net": net, "bonus": bonus})
 	for reg in closed_regions(entry):
 		var rbonus := Rules.region_bonus(self, reg.tiles.size())
@@ -194,7 +219,15 @@ func finish_placement(entry: Dictionary, ev: Dictionary) -> Dictionary:
 		total += rbonus
 		regions_closed += 1
 		biggest_closed = maxi(biggest_closed, reg.tiles.size())
+		if reg.t == "forest":
+			closed_forest_max = maxi(closed_forest_max, reg.tiles.size())
+		elif reg.t == "meadow":
+			closed_meadow_max = maxi(closed_meadow_max, reg.tiles.size())
 		res.regions.append({"reg": reg, "bonus": rbonus})
+	if ev.events.size() > 1:
+		chains += 1  # one special set off another
+	if ev.perfect and entry.tile.gold:
+		gold_perfects += 1
 	if ev.perfect:
 		streak += 1
 		perfects += 1
@@ -294,6 +327,13 @@ func apply_harvest(points: int) -> void:
 func cleared() -> bool:
 	return round_score >= goal()
 
+## Call once when a round ends with the goal reached (before the draft).
+func mark_cleared() -> void:
+	rounds_cleared = round_idx + 1
+	if boss != "":
+		bosses_beaten += 1
+
+
 
 func is_last_round() -> bool:
 	return round_idx == Defs.ROUNDS - 1
@@ -302,7 +342,7 @@ func is_last_round() -> bool:
 func draft_pool() -> Array:
 	var pool: Array = []
 	for r in Defs.RELICS:
-		if not has_relic(r.id):
+		if not has_relic(r.id) and allowed_relics.has(r.id):
 			pool.append(r)
 	return Defs.shuffle(pool, rng).slice(0, 3)
 

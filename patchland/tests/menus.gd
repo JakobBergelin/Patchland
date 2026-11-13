@@ -125,5 +125,36 @@ func _run() -> void:
 	check(game.overlay_kind == "end", "Back from the scoreboard returns to the run summary")
 	game.show_main_menu()
 	check(not game.run_active and game.overlay_kind == "menu", "menu after a finished run offers Play, not Continue")
+
+	# --- unlocks: a fresh profile's run only has unlocked things ---
+	game.start_play()
+	await _wait(5)
+	check(game.S.allowed_specials.is_empty() and game.S.allowed_relics.size() == Unlocks.STARTER_RELICS.size(), "a fresh profile's run has no specials and only starter relics")
+	game.S.rounds_cleared = 1
+	game._check_unlocks()
+	check(game.S.allowed_specials == ["windmill"] and Unlocks.is_unlocked(CFG, "windmill"), "earning an achievement unlocks it at once, also in this run")
+	await _shot("m9_unlocked_toast")
+	# --- collection screen ---
+	game.show_collection("menu")
+	await _wait(5)
+	check(game.overlay_kind == "collection", "Collection opens from the menu")
+	await _shot("m10_collection")
+	game._on_escape()
+	check(game.overlay_kind == "menu", "Esc from Collection goes back to the menu")
+	# --- test run: everything unlocked, nothing recorded ---
+	var scores_before := Scores.load_list(CFG).size()
+	var unlocks_before := Unlocks.load_ids(CFG).size()
+	game.test_run = true
+	game.start_play()
+	await _wait(5)
+	check(game.run_is_test and game.S.allowed_specials.size() == Defs.SKEYS.size() and game.S.allowed_relics.size() == Defs.RELICS.size(), "a test run has every special and relic")
+	game.S.best_streak = 10
+	game._check_unlocks()
+	game.S.total = 999999
+	game.game_over()
+	await _wait(5)
+	check(Scores.load_list(CFG).size() == scores_before and Unlocks.load_ids(CFG).size() == unlocks_before, "a test run records no score and earns no achievements")
+	await _shot("m11_test_run_end")
+	game.test_run = false
 	print("FAILURES: %d" % failures)
 	quit(1 if failures else 0)

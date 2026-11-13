@@ -14,6 +14,9 @@ var cur_eval = null
 var calc_hold = null
 var shown := 0
 var started := false
+var test_run := false  # menu switch: everything unlocked, no scoreboard entry, no achievements
+var unlocked_this_run: Array = []  # achievements earned during the current run
+var run_is_test := false  # the current run was started as a test run
 var run_active := false  # a run (or the tutorial) is in progress; the menu offers Continue
 var tut: Tutorial = null  # set while the tutorial runs
 var tut_hidden := false
@@ -662,6 +665,12 @@ func new_run(seed_val := -1, tutorial := false) -> void:
 	hl_region = null
 	board.clear_tiles()
 	S = RunState.new()
+	# which specials and relics can show up: your unlocks, or everything on a test run
+	run_is_test = test_run and not tutorial
+	if not run_is_test and not tutorial:
+		S.allowed_specials = Unlocks.specials(settings_path)
+		S.allowed_relics = Unlocks.relics(settings_path)
+	unlocked_this_run.clear()
 	S.new_run(seed_val)
 	tut = null
 	tut_hidden = false
@@ -897,6 +906,7 @@ func finish_placement(entry: Dictionary, ev: Dictionary) -> void:
 			sfx.clear()
 		else:
 			sfx.quest()
+	_check_unlocks()
 	if S.tiles_left <= 0:
 		after(450, start_harvest)
 	else:
@@ -1437,7 +1447,7 @@ func _on_escape() -> void:
 			show_main_menu()
 		return
 	match overlay_kind:
-		"rules", "scores":
+		"rules", "scores", "collection":
 			_overlay_back()
 		"menu":
 			if run_active:
@@ -1584,11 +1594,26 @@ func show_main_menu() -> void:
 		if first_time:
 			sheet_box.add_child(_para("New here? The tutorial walks you through a first round in a couple of minutes.", 14, Pal.soft))
 		sheet_box.add_child(_menu_button("Play", start_play, not first_time))
+	# test switch for the next run: everything unlocked, nothing recorded
+	var test_box := CheckButton.new()
+	test_box.text = "Test run: everything unlocked"
+	test_box.tooltip_text = "The next run you start has every special tile and relic. It doesn't go on the scoreboard or earn achievements."
+	test_box.button_pressed = test_run
+	test_box.focus_mode = Control.FOCUS_ALL
+	test_box.add_theme_color_override("font_color", Pal.soft)
+	test_box.add_theme_color_override("font_pressed_color", Pal.gold)
+	test_box.add_theme_color_override("font_hover_color", Pal.ink)
+	test_box.add_theme_color_override("font_hover_pressed_color", Pal.gold)
+	test_box.add_theme_font_size_override("font_size", 14)
+	test_box.toggled.connect(func(on): test_run = on)
+	sheet_box.add_child(test_box)
 	sheet_box.add_child(_menu_button("Tutorial", start_tutorial, first_time and not run_active))
+	var pr := Unlocks.progress(settings_path)
 	sheet_box.add_child(_button_row([
+		_menu_button("Collection %d/%d" % [pr.x, pr.y], show_collection.bind("menu")),
 		_menu_button("Scoreboard", show_scoreboard.bind("menu")),
-		_menu_button("How to play", show_rules.bind("menu")),
 	]))
+	sheet_box.add_child(_menu_button("How to play", show_rules.bind("menu")))
 	var best := get_best()
 	if best > 0:
 		sheet_box.add_child(_para("Best run: %s points" % Defs.fmt(best), 14, Pal.soft))
@@ -1607,6 +1632,8 @@ func start_play() -> void:
 	started = true
 	run_active = true
 	round_banner()
+	if run_is_test:
+		toast("Test run: everything unlocked. Not recorded on the scoreboard.")
 
 
 func start_tutorial() -> void:
@@ -1772,6 +1799,8 @@ func show_tutorial_end(cleared: bool) -> void:
 # ---------- rounds and run end ----------
 
 func end_round() -> void:
+	S.mark_cleared()
+	_check_unlocks()
 	if tut != null:
 		show_tutorial_end(true)
 		return
@@ -1883,7 +1912,7 @@ func _stats() -> GridContainer:
 ## End of a real run: records it on the scoreboard and shows the summary.
 func _end_sheet(title: String, body: String, won: bool) -> void:
 	run_active = false
-	last_rank = Scores.record(settings_path, Scores.make_entry(S, won))
+	last_rank = 0 if run_is_test else Scores.record(settings_path, Scores.make_entry(S, won))
 	_end_title = title
 	_end_body = body
 	_show_end_again()
@@ -1898,6 +1927,13 @@ func _show_end_again() -> void:
 	elif last_rank > 0:
 		sheet_box.add_child(_lbl("#%d on your scoreboard" % last_rank, 18, Pal.gold, true))
 	sheet_box.add_child(_para(_end_body))
+	if run_is_test:
+		sheet_box.add_child(_para("Test run: not recorded on the scoreboard and no achievements earned.", 14, Pal.soft))
+	elif not unlocked_this_run.is_empty():
+		var got: Array[String] = []
+		for a in unlocked_this_run:
+			got.append(_unlock_name(a))
+		sheet_box.add_child(_para("Unlocked this run: " + ", ".join(got), 16, Pal.gold))
 	sheet_box.add_child(_stats())
 	sheet_box.add_child(_menu_button("New run", start_play, true))
 	sheet_box.add_child(_button_row([
@@ -1908,6 +1944,7 @@ func _show_end_again() -> void:
 
 
 func game_over() -> void:
+	_check_unlocks()
 	if tut != null:
 		show_tutorial_end(false)
 		return
@@ -1916,3 +1953,90 @@ func game_over() -> void:
 
 func win() -> void:
 	_end_sheet("All 8 rounds cleared", "Your countryside held up. The run scored %s points with %d relics." % [Defs.fmt(S.total), S.relics.size()], true)
+
+
+# ---------- unlocks and collection ----------
+
+## Checks achievements after play events; unlocked items join this run at once.
+func _check_unlocks() -> void:
+	if tut != null or run_is_test or S == null:
+		return
+	var fresh := Unlocks.check(settings_path, S)
+	if fresh.is_empty():
+		return
+	var names: Array[String] = []
+	for a in fresh:
+		unlocked_this_run.append(a)
+		if a.kind == "special":
+			if not S.allowed_specials.has(a.id):
+				S.allowed_specials.append(a.id)
+		elif not S.allowed_relics.has(a.id):
+			S.allowed_relics.append(a.id)
+		names.append(_unlock_name(a))
+	toast("Unlocked: %s! See Collection in the menu." % ", ".join(names))
+	sfx.clear()
+
+
+func _unlock_name(a: Dictionary) -> String:
+	return Defs.SPECIALS[a.id].name if a.kind == "special" else Defs.relic(a.id).name
+
+
+## Every special tile and relic: unlocked ones say what they do, locked ones are
+## blacked out and say how to unlock them.
+func show_collection(back := "menu") -> void:
+	open_overlay()
+	overlay_kind = "collection"
+	overlay_back = back
+	var pr := Unlocks.progress(settings_path)
+	sheet_box.add_child(_lbl("Collection", 34, Pal.ink, true))
+	sheet_box.add_child(_para("%d of %d unlocked. Earn achievements in your runs to unlock more special tiles and relics." % [pr.x, pr.y], 14, Pal.soft))
+	sheet_box.add_child(_lbl("Special tiles", 19, Pal.gold, true))
+	for k in Defs.SKEYS:
+		var t := Tile.mono("meadow", hash(k) & 0x7fffffff)
+		t.base = ["meadow", "field", "meadow", "forest", "meadow", "field"] as Array[String]
+		t.special = k
+		var a := Unlocks.achievement(k)
+		var sp: Dictionary = Defs.SPECIALS[k]
+		sheet_box.add_child(_collection_row(t, sp.name, sp.desc, a.get("how", ""), Unlocks.is_unlocked(settings_path, k)))
+	sheet_box.add_child(_lbl("Relics", 19, Pal.gold, true))
+	for r in Defs.RELICS:
+		var t := Tile.mono(r.t, hash(r.id) & 0x7fffffff)
+		var a := Unlocks.achievement(r.id)
+		var how: String = a.get("how", "") if not a.is_empty() else ""
+		var desc: String = r.desc + (" Available from the start." if Unlocks.STARTER_RELICS.has(r.id) else "")
+		sheet_box.add_child(_collection_row(t, r.name, desc, how, Unlocks.is_unlocked(settings_path, r.id)))
+	sheet_box.add_child(_menu_button("Back", _overlay_back, true))
+	_focus_first_button()
+
+
+func _collection_row(tile: Tile, title: String, desc: String, how: String, unlocked: bool) -> PanelContainer:
+	var p := PanelContainer.new()
+	var border := Pal.line if unlocked else Color(0, 0, 0, 0)
+	p.add_theme_stylebox_override("panel", _sb(Pal.bg2 if unlocked else Pal.bg, 12, border, 1, Vector4(10, 8, 12, 8)))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	var tv := TileView.new()
+	tv.custom_minimum_size = Vector2(48, 48)
+	tv.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	tv.tile = tile
+	if not unlocked:
+		tv.modulate = Color(0, 0, 0, 0.9)  # blacked-out silhouette
+	row.add_child(tv)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 2)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	head.add_child(_lbl(title if unlocked else "Locked", 16, Pal.ink if unlocked else Pal.soft, true))
+	if not unlocked:
+		var lock := _lbl("· " + title, 14, Pal.soft)
+		head.add_child(lock)
+	col.add_child(head)
+	var w := SHEET_W - 44 - 22 - 48 - 12
+	if unlocked:
+		col.add_child(_para(desc, 14, Pal.soft, w))
+	else:
+		col.add_child(_para("To unlock: " + how, 14, Pal.gold, w))
+	row.add_child(col)
+	p.add_child(row)
+	return p
