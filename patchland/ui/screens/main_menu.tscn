@@ -1,0 +1,225 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ui/screens/main_menu.gd" id="1_menu"]
+[ext_resource type="Script" path="res://ui/cluster_view.gd" id="2_cluster"]
+
+[node name="MainMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_menu")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.055, 0.078, 0.071, 0.94)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 64
+theme_override_constants/margin_top = 48
+theme_override_constants/margin_right = 64
+theme_override_constants/margin_bottom = 40
+
+[node name="Row" type="HBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 48
+
+[node name="Left" type="VBoxContainer" parent="Margin/Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="Title" type="Label" parent="Margin/Row/Left"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "Patchland"
+
+[node name="Tagline" type="Label" parent="Margin/Row/Left"]
+custom_minimum_size = Vector2(380, 0)
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+theme_override_font_sizes/font_size = 17
+text = "Grow a patchwork countryside. Match the land, close the map and bring in the biggest harvest."
+autowrap_mode = 3
+
+[node name="Rail" type="PanelContainer" parent="Margin/Row/Left"]
+custom_minimum_size = Vector2(380, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_type_variation = &"Rail"
+
+[node name="Buttons" type="VBoxContainer" parent="Margin/Row/Left/Rail"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="RunInfo" type="Label" parent="Margin/Row/Left/Rail/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Round 1 of 8"
+horizontal_alignment = 1
+
+[node name="Continue" type="Button" parent="Margin/Row/Left/Rail/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Continue"
+
+[node name="Play" type="Button" parent="Margin/Row/Left/Rail/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Play"
+
+[node name="Season" type="HBoxContainer" parent="Margin/Row/Left/Rail/Buttons"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SeasonPrev" type="Button" parent="Margin/Row/Left/Rail/Buttons/Season"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(44, 40)
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "‹"
+
+[node name="SeasonLabel" type="Label" parent="Margin/Row/Left/Rail/Buttons/Season"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"GoldLabel"
+text = "Season 1"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SeasonNext" type="Button" parent="Margin/Row/Left/Rail/Buttons/Season"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(44, 40)
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "›"
+
+[node name="SeasonInfo" type="Label" parent="Margin/Row/Left/Rail/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"SmallLabel"
+text = "Normal goals"
+horizontal_alignment = 1
+
+[node name="NewRun" type="Button" parent="Margin/Row/Left/Rail/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+text = "New run"
+
+[node name="Tutorial" type="Button" parent="Margin/Row/Left/Rail/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+text = "Tutorial"
+
+[node name="Grid" type="GridContainer" parent="Margin/Row/Left/Rail/Buttons"]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="Collection" type="Button" parent="Margin/Row/Left/Rail/Buttons/Grid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Collection"
+
+[node name="Scoreboard" type="Button" parent="Margin/Row/Left/Rail/Buttons/Grid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Scoreboard"
+
+[node name="Rules" type="Button" parent="Margin/Row/Left/Rail/Buttons/Grid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "How to play"
+
+[node name="Quit" type="Button" parent="Margin/Row/Left/Rail/Buttons/Grid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"GhostButton"
+text = "Quit"
+
+[node name="TestRun" type="CheckButton" parent="Margin/Row/Left/Rail/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "The next run you start has every special tile and relic. It doesn't go on the scoreboard or earn achievements."
+text = "Test run: everything unlocked"
+
+[node name="Best" type="Label" parent="Margin/Row/Left"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Best run: 0"
+
+[node name="Right" type="VBoxContainer" parent="Margin/Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="Hero" type="Control" parent="Margin/Row/Right"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 360)
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("2_cluster")
+
+[node name="Progress" type="PanelContainer" parent="Margin/Row/Right"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_type_variation = &"Card"
+
+[node name="Box" type="VBoxContainer" parent="Margin/Row/Right/Progress"]
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ProgressLabel" type="Label" parent="Margin/Row/Right/Progress/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"BoldLabel"
+text = "Collection 8/48"
+
+[node name="ProgressBar" type="ProgressBar" parent="Margin/Row/Right/Progress/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+show_percentage = false
+
+[node name="NextUnlock" type="Label" parent="Margin/Row/Right/Progress/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+theme_type_variation = &"SmallLabel"
+text = "Next to unlock: ..."
+autowrap_mode = 3

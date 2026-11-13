@@ -74,6 +74,8 @@ var overlay: ColorRect
 var sheet: PanelContainer
 var sheet_box: VBoxContainer
 var sheet_scroll: ScrollContainer
+var sheet_center: CenterContainer
+var screen: Control = null  # the full-screen scene shown in the overlay (menu, collection, ...)
 var hud_m: MarginContainer
 var rel_m: MarginContainer
 var tray_m: MarginContainer
@@ -94,11 +96,8 @@ func _ready() -> void:
 	Pal.init()
 	RenderingServer.set_default_clear_color(Pal.bg)
 	DisplayServer.window_set_min_size(Vector2i(760, 680))
-	var th := Theme.new()
-	th.default_font = Pal.font
-	th.default_font_size = 15
-	th.set_color("font_color", "Label", Pal.ink)
-	theme = th
+	# fonts, colours and button/panel styles: edit ui/theme/patchland_theme.tres in the editor
+	theme = load("res://ui/theme/patchland_theme.tres")
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_load_settings()
 	sfx = Sfx.new()
@@ -213,20 +212,8 @@ func _para(text: String, fs := 15, col: Color = Pal.ink, width := SHEET_W - 44) 
 
 
 func _style_button(b: Button, primary := false, radius := 12) -> void:
-	var bg := Pal.mult if primary else Pal.bg2
-	var border := Color(0, 0, 0, 0) if primary else Pal.line
-	b.add_theme_stylebox_override("normal", _sb(bg, radius, border, 1))
-	b.add_theme_stylebox_override("hover", _sb(bg.lightened(0.06) if primary else bg.darkened(0.04), radius, Pal.soft if not primary else border, 1))
-	b.add_theme_stylebox_override("pressed", _sb(bg.darkened(0.08), radius, border, 1))
-	b.add_theme_stylebox_override("disabled", _sb(Color(bg, 0.4), radius, Color(border, border.a * 0.4), 1))
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	var fc := Color.WHITE if primary else Pal.ink
-	b.add_theme_color_override("font_color", fc)
-	b.add_theme_color_override("font_hover_color", fc)
-	b.add_theme_color_override("font_pressed_color", fc)
-	b.add_theme_color_override("font_focus_color", fc)
-	b.add_theme_color_override("font_disabled_color", Color(fc, 0.4))
-	b.add_theme_font_override("font", Pal.bold)
+	# looks come from the theme (ui/theme/patchland_theme.tres): Button / PrimaryButton
+	b.theme_type_variation = &"PrimaryButton" if primary else &""
 	b.add_theme_font_size_override("font_size", 16)
 
 
@@ -586,12 +573,9 @@ func _build_ui() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(center)
+	sheet_center = center
 	sheet = PanelContainer.new()
-	var sheet_sb := _sb(Pal.panel, 20, Color(0, 0, 0, 0), 0, Vector4(22, 22, 22, 20))
-	sheet_sb.shadow_color = Color(0, 0, 0, 0.25)
-	sheet_sb.shadow_size = 24
-	sheet_sb.shadow_offset = Vector2(0, 12)
-	sheet.add_theme_stylebox_override("panel", sheet_sb)
+	sheet.theme_type_variation = &"Sheet"
 	sheet.custom_minimum_size.x = SHEET_W
 	center.add_child(sheet)
 	sheet_scroll = ScrollContainer.new()
@@ -1509,7 +1493,16 @@ func _unhandled_input(event: InputEvent) -> void:
 # overlays
 # ======================================================================
 
+func _drop_screen() -> void:
+	if screen != null:
+		screen.queue_free()
+		screen = null
+
+
+## Opens the overlay with the small sheet (drafts, run summaries).
 func open_overlay() -> void:
+	_drop_screen()
+	sheet_center.visible = true
 	for c in sheet_box.get_children():
 		sheet_box.remove_child(c)
 		c.queue_free()
@@ -1526,9 +1519,28 @@ func open_overlay() -> void:
 		tw.tween_property(sheet, "scale", Vector2.ONE, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
+## Opens the overlay with a full-screen scene (ui/screens/*.tscn) and returns it.
+func open_screen(path: String, kind: String) -> Control:
+	_drop_screen()
+	for c in sheet_box.get_children():
+		c.queue_free()
+	sheet_center.visible = false
+	overlay.visible = true
+	overlay_kind = kind
+	set_sel(null, true)
+	screen = load(path).instantiate()
+	overlay.add_child(screen)
+	if not reduced:
+		screen.modulate.a = 0
+		_anim(screen, "screen").tween_property(screen, "modulate:a", 1.0, 0.22)
+	return screen
+
+
 func close_overlay() -> void:
 	overlay.visible = false
 	overlay_kind = ""
+	_drop_screen()
+	sheet_center.visible = true
 	for c in sheet_box.get_children():
 		c.queue_free()
 
@@ -1585,50 +1597,6 @@ func _hero_view(h := 150.0) -> ClusterView:
 
 # ---------- main menu ----------
 
-## Title screen at launch, and the pause menu (Esc) during a run.
-func show_main_menu() -> void:
-	open_overlay()
-	overlay_kind = "menu"
-	sheet_box.add_child(_lbl("Patchland", 46, Pal.ink, true))
-	sheet_box.add_child(_hero_view(140))
-	var first_time: bool = not _get_setting("tutorial_done", false)
-	if run_active:
-		var where := "Tutorial" if tut != null else "Round %d of %d" % [S.round_idx + 1, Defs.ROUNDS]
-		sheet_box.add_child(_para("%s · %s points so far" % [where, Defs.fmt(S.round_score if tut != null else S.total)], 14, Pal.soft))
-		sheet_box.add_child(_menu_button("Continue", _resume, true))
-		sheet_box.add_child(_menu_button("New run", start_play))
-	else:
-		if first_time:
-			sheet_box.add_child(_para("New here? The tutorial walks you through a first round in a couple of minutes.", 14, Pal.soft))
-		sheet_box.add_child(_menu_button("Play", start_play, not first_time))
-	# test switch for the next run: everything unlocked, nothing recorded
-	var test_box := CheckButton.new()
-	test_box.text = "Test run: everything unlocked"
-	test_box.tooltip_text = "The next run you start has every special tile and relic. It doesn't go on the scoreboard or earn achievements."
-	test_box.button_pressed = test_run
-	test_box.focus_mode = Control.FOCUS_ALL
-	test_box.add_theme_color_override("font_color", Pal.soft)
-	test_box.add_theme_color_override("font_pressed_color", Pal.gold)
-	test_box.add_theme_color_override("font_hover_color", Pal.ink)
-	test_box.add_theme_color_override("font_hover_pressed_color", Pal.gold)
-	test_box.add_theme_font_size_override("font_size", 14)
-	test_box.toggled.connect(func(on): test_run = on)
-	sheet_box.add_child(test_box)
-	sheet_box.add_child(_menu_button("Tutorial", start_tutorial, first_time and not run_active))
-	var pr := Unlocks.progress(settings_path)
-	sheet_box.add_child(_button_row([
-		_menu_button("Collection %d/%d" % [pr.x, pr.y], show_collection.bind("menu")),
-		_menu_button("Scoreboard", show_scoreboard.bind("menu")),
-	]))
-	sheet_box.add_child(_menu_button("How to play", show_rules.bind("menu")))
-	var best := get_best()
-	if best > 0:
-		sheet_box.add_child(_para("Best run: %s points" % Defs.fmt(best), 14, Pal.soft))
-	if OS.get_name() != "Web":
-		sheet_box.add_child(_menu_button("Quit", func(): get_tree().quit()))
-	_focus_first_button()
-
-
 func _resume() -> void:
 	close_overlay()
 
@@ -1660,43 +1628,6 @@ func _focus_first_button() -> void:
 
 # ---------- rules sheet (the ? button) ----------
 
-## How to play. `back` is where the Back button returns: "board" or "menu".
-func show_rules(back := "board") -> void:
-	open_overlay()
-	overlay_kind = "rules"
-	overlay_back = back
-	sheet_box.add_child(_lbl("How to play", 34, Pal.ink, true))
-	sheet_box.add_child(_hero_view(130))
-	sheet_box.add_child(_para("Lay hex tiles to grow a patch of countryside. Every edge that matches the land beside it adds its yield and +1 multiplier, and matching every neighbor doubles the multiplier."))
-	sheet_box.add_child(_para("When your tiles run out, the harvest scores every region of linked land on the whole board, and bigger regions raise the multiplier. Your placements plus the harvest must reach the goal."))
-	sheet_box.add_child(_para("Close an area of one land type (no open edge left) for a bonus that grows with its size."))
-	sheet_box.add_child(_para("Windmills, lighthouses and bell towers fire rays that score every tile they hit, and a ray that hits another special tile sets it off too. Golden tiles, quest flags, perfect streaks and boss rounds (3, 6 and 8) add extra twists."))
-	sheet_box.add_child(_para("Rivers and railroads score extra when they link across an edge. Railroads run between stations in cities, rivers flow out of and into water, and you can never place a tile that cuts one. A line that runs end to end scores again in the harvest."))
-	var legend := HFlowContainer.new()
-	legend.add_theme_constant_override("h_separation", 12)
-	legend.add_theme_constant_override("v_separation", 6)
-	var order: Array = Defs.TKEYS.duplicate()
-	order.sort_custom(func(a, b): return Defs.TER[a].chips > Defs.TER[b].chips)
-	order.append_array(Defs.FKEYS)
-	for t in order:
-		var it := HBoxContainer.new()
-		it.add_theme_constant_override("separation", 6)
-		var ic := IconView.new()
-		ic.kind = "hex"
-		ic.color = Defs.top(t)
-		ic.custom_minimum_size = Vector2(12, 13)
-		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		it.add_child(ic)
-		it.add_child(_lbl(Defs.name_of(t), 14, Pal.soft))
-		it.add_child(_lbl(str((Defs.FEAT[t] if Defs.FEAT.has(t) else Defs.TER[t]).chips), 14, Pal.ink, true))
-		legend.add_child(it)
-	sheet_box.add_child(legend)
-	sheet_box.add_child(_para("Rotate by right-clicking (shift + right-click turns the other way), Ctrl + scroll, R / Q, the Rotate button, or by clicking your tile. Redraw swaps your tile for the next one. Scroll to zoom, drag or use WASD to move the view, and press F (or double-click empty ground) to see the whole board again. F11 toggles fullscreen, Esc opens the menu.", 14, Pal.soft))
-	sheet_box.add_child(_menu_button("Back to the board" if back == "board" else "Back", _overlay_back, true))
-	_focus_first_button()
-
-
-## Back from a sub-screen (rules, scoreboard) to wherever it was opened from.
 func _overlay_back() -> void:
 	if overlay_back == "menu":
 		show_main_menu()
@@ -1707,40 +1638,6 @@ func _overlay_back() -> void:
 
 
 # ---------- scoreboard ----------
-
-func show_scoreboard(back := "menu") -> void:
-	open_overlay()
-	overlay_kind = "scores"
-	overlay_back = back
-	sheet_box.add_child(_lbl("Scoreboard", 34, Pal.ink, true))
-	var list := Scores.load_list(settings_path)
-	if list.is_empty():
-		sheet_box.add_child(_para("No runs yet. Finish a run and it shows up here.", 15, Pal.soft))
-	else:
-		var grid := GridContainer.new()
-		grid.columns = 4
-		grid.add_theme_constant_override("h_separation", 14)
-		grid.add_theme_constant_override("v_separation", 6)
-		for h in ["#", "Score", "Reached", "Date"]:
-			grid.add_child(_lbl(h, 13, Pal.soft, true))
-		for i in list.size():
-			var e: Dictionary = list[i]
-			var hl := i == last_rank - 1 and last_rank > 0
-			var col := Pal.gold if hl else Pal.ink
-			grid.add_child(_lbl(str(i + 1), 16, col, true))
-			var sc := _lbl(Defs.fmt(e.score), 16, col, true)
-			sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			grid.add_child(sc)
-			grid.add_child(_lbl("Won all %d" % Defs.ROUNDS if e.get("won", false) else "Round %d" % (int(e.get("rounds", 0)) + 1), 15, Pal.gold if e.get("won", false) else col))
-			grid.add_child(_lbl(str(e.get("date", "")), 14, Pal.soft))
-		var panel := PanelContainer.new()
-		panel.add_theme_stylebox_override("panel", _sb(Pal.bg2, 12, Color(0, 0, 0, 0), 0, Vector4(14, 10, 14, 10)))
-		panel.add_child(grid)
-		sheet_box.add_child(panel)
-		sheet_box.add_child(_para("Your best %d runs on this computer." % Scores.KEEP, 13, Pal.soft))
-	sheet_box.add_child(_menu_button("Back", _overlay_back, true))
-	_focus_first_button()
-
 
 # ---------- tutorial callout ----------
 
@@ -1866,7 +1763,18 @@ func show_draft(first: bool) -> void:
 		col.add_theme_constant_override("separation", 2)
 		var nm := _lbl(r.name, 17, Pal.ink, true)
 		nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		col.add_child(nm)
+		var head := HBoxContainer.new()
+		head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		head.add_theme_constant_override("separation", 8)
+		head.add_child(nm)
+		if r.rarity > 0:
+			# Fine (blue) and Heirloom (gold) relics are rarer: flag them
+			var rl := _lbl(Defs.RARITY_NAMES[r.rarity], 13, Color("#8fc3e8") if r.rarity == 1 else Pal.gold, true)
+			rl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			rl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			head.add_child(rl)
+			card.add_theme_stylebox_override("normal", _sb(Pal.bg2, 14, Pal.gold if r.rarity == 2 else Color("#8fc3e8"), 1))
+		col.add_child(head)
 		var ds := _para(r.desc, 14, Pal.soft, SHEET_W - 44 - 24 - 54 - 12)
 		ds.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		col.add_child(ds)
@@ -1992,62 +1900,72 @@ func _unlock_name(a: Dictionary) -> String:
 	return Defs.SPECIALS[a.id].name if a.kind == "special" else Defs.relic(a.id).name
 
 
-## Every special tile and relic: unlocked ones say what they do, locked ones are
-## blacked out and say how to unlock them.
-func show_collection(back := "menu") -> void:
-	open_overlay()
-	overlay_kind = "collection"
+
+# ---------- full-screen scenes (ui/screens) ----------
+
+const MENU_SCENE := "res://ui/screens/main_menu.tscn"
+const COLLECTION_SCENE := "res://ui/screens/collection.tscn"
+const RULES_SCENE := "res://ui/screens/rules.tscn"
+const SCOREBOARD_SCENE := "res://ui/screens/scoreboard.tscn"
+
+
+## Title screen at launch, and the pause menu (Esc) during a run.
+func show_main_menu() -> void:
+	var m = open_screen(MENU_SCENE, "menu")
+	season_pick = clampi(season_pick, 1, Unlocks.seasons_open(settings_path))
+	var info := ""
+	if run_active:
+		info = ("Tutorial" if tut != null else "Season %d · Round %d of %d" % [S.season, S.round_idx + 1, Defs.ROUNDS]) + " · %s points" % Defs.fmt(S.round_score if tut != null else S.total)
+	if hero.is_empty():
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		hero = ClusterView.hero_cluster(rng)
+	m.setup({
+		"run_active": run_active, "run_info": info, "first_time": not _get_setting("tutorial_done", false),
+		"season": season_pick, "seasons_open": Unlocks.seasons_open(settings_path), "test_run": test_run,
+		"best": get_best(), "progress": Unlocks.progress(settings_path), "next_unlock": _next_unlock_text(), "hero": hero,
+	})
+	m.continue_pressed.connect(_resume)
+	m.play_pressed.connect(start_play)
+	m.tutorial_pressed.connect(start_tutorial)
+	m.collection_pressed.connect(func(): show_collection("menu"))
+	m.scoreboard_pressed.connect(func(): show_scoreboard("menu"))
+	m.rules_pressed.connect(func(): show_rules("menu"))
+	m.quit_pressed.connect(func(): get_tree().quit())
+	m.season_changed.connect(func(s): season_pick = s)
+	m.test_run_toggled.connect(func(on): test_run = on)
+
+
+## The next couple of achievements still locked, for the menu's progress card.
+func _next_unlock_text() -> String:
+	var ids := Unlocks.load_ids(settings_path)
+	var lines: Array[String] = []
+	for a in Unlocks.LIST:
+		if not ids.has(a.id):
+			lines.append("%s: %s" % [_unlock_name(a), a.how])
+			if lines.size() == 2:
+				break
+	return "Everything unlocked!" if lines.is_empty() else "Next up  ·  " + "\n".join(lines)
+
+
+## How to play. `back` is where Back returns: "board", "menu" or "end".
+func show_rules(back := "board") -> void:
 	overlay_back = back
-	var pr := Unlocks.progress(settings_path)
-	sheet_box.add_child(_lbl("Collection", 34, Pal.ink, true))
-	sheet_box.add_child(_para("%d of %d unlocked. Earn achievements in your runs to unlock more special tiles and relics." % [pr.x, pr.y], 14, Pal.soft))
-	sheet_box.add_child(_lbl("Special tiles", 19, Pal.gold, true))
-	for k in Defs.SKEYS:
-		var t := Tile.mono("meadow", hash(k) & 0x7fffffff)
-		t.base = ["meadow", "field", "meadow", "forest", "meadow", "field"] as Array[String]
-		t.special = k
-		var a := Unlocks.achievement(k)
-		var sp: Dictionary = Defs.SPECIALS[k]
-		sheet_box.add_child(_collection_row(t, sp.name, sp.desc, a.get("how", ""), Unlocks.is_unlocked(settings_path, k)))
-	sheet_box.add_child(_lbl("Relics", 19, Pal.gold, true))
-	for r in Defs.RELICS:
-		var t := Tile.mono(r.t, hash(r.id) & 0x7fffffff)
-		var a := Unlocks.achievement(r.id)
-		var how: String = a.get("how", "") if not a.is_empty() else ""
-		var desc: String = r.desc + (" Available from the start." if Unlocks.STARTER_RELICS.has(r.id) else "")
-		sheet_box.add_child(_collection_row(t, r.name, desc, how, Unlocks.is_unlocked(settings_path, r.id)))
-	sheet_box.add_child(_menu_button("Back", _overlay_back, true))
-	_focus_first_button()
+	var r = open_screen(RULES_SCENE, "rules")
+	r.back_pressed.connect(_overlay_back)
 
 
-func _collection_row(tile: Tile, title: String, desc: String, how: String, unlocked: bool) -> PanelContainer:
-	var p := PanelContainer.new()
-	var border := Pal.line if unlocked else Color(0, 0, 0, 0)
-	p.add_theme_stylebox_override("panel", _sb(Pal.bg2 if unlocked else Pal.bg, 12, border, 1, Vector4(10, 8, 12, 8)))
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	var tv := TileView.new()
-	tv.custom_minimum_size = Vector2(48, 48)
-	tv.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	tv.tile = tile
-	if not unlocked:
-		tv.modulate = Color(0, 0, 0, 0.9)  # blacked-out silhouette
-	row.add_child(tv)
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 2)
-	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 8)
-	head.add_child(_lbl(title if unlocked else "Locked", 16, Pal.ink if unlocked else Pal.soft, true))
-	if not unlocked:
-		var lock := _lbl("· " + title, 14, Pal.soft)
-		head.add_child(lock)
-	col.add_child(head)
-	var w := SHEET_W - 44 - 22 - 48 - 12
-	if unlocked:
-		col.add_child(_para(desc, 14, Pal.soft, w))
-	else:
-		col.add_child(_para("To unlock: " + how, 14, Pal.gold, w))
-	row.add_child(col)
-	p.add_child(row)
-	return p
+func show_scoreboard(back := "menu") -> void:
+	overlay_back = back
+	var sb = open_screen(SCOREBOARD_SCENE, "scores")
+	sb.setup(settings_path, last_rank)
+	sb.back_pressed.connect(_overlay_back)
+
+
+## Every special tile, relic and Season: unlocked ones say what they do, locked
+## ones are blacked out and say how to unlock them.
+func show_collection(back := "menu") -> void:
+	overlay_back = back
+	var c = open_screen(COLLECTION_SCENE, "collection")
+	c.setup(settings_path)
+	c.back_pressed.connect(_overlay_back)

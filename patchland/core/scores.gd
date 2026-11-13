@@ -43,4 +43,5 @@ static func make_entry(s: RunState, won: bool) -> Dictionary:
 		"relics": s.relics.size(),
 		"best_harvest": s.best_harvest,
 		"date": Time.get_date_string_from_system(),
+		"season": s.season,
 	}
