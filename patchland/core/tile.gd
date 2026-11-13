@@ -108,7 +108,7 @@ static func pick_terrain(rng: RandomNumberGenerator) -> String:
 	return "meadow"
 
 
-static func make(rng: RandomNumberGenerator, min_kinds := 0, plain := false, relics: Array = [], round_idx := 0, open_lines := {}) -> Tile:
+static func make(rng: RandomNumberGenerator, min_kinds := 0, plain := false, relics: Array = [], round_idx := 0, open_lines := {}, specials: Array = Defs.SKEYS) -> Tile:
 	var roll := rng.randf()
 	var k := 1 if roll < 0.18 else (2 if roll < 0.62 else (3 if roll < 0.94 else 4))
 	k = maxi(k, min_kinds)
@@ -136,8 +136,9 @@ static func make(rng: RandomNumberGenerator, min_kinds := 0, plain := false, rel
 	if not plain:
 		var special_chance := 0.2 if relics.has("architect") else 0.1
 		var gold_chance := 0.18 if relics.has("goldsmith") else 0.06
-		if rng.randf() < special_chance:
-			tile.special = Defs.SKEYS[rng.randi_range(0, Defs.SKEYS.size() - 1)]
+		# only unlocked special tiles can be dealt; with none unlocked, no specials at all
+		if not specials.is_empty() and rng.randf() < special_chance:
+			tile.special = specials[rng.randi_range(0, specials.size() - 1)]
 		else:
 			# rivers/railroads are independent of the gold/quest roll; specials never get one
 			if rng.randf() < Defs.FEATURE_CHANCE:
