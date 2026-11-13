@@ -378,6 +378,17 @@ func _draw_fx() -> void:
 			TileArt.stroke_hex(ci, p, s * 0.94, glow, maxf(1.5, s * 0.07) + 5)
 			TileArt.stroke_hex(ci, p, s * 0.94, Color(1, 1, 1, 0.95), maxf(1.5, s * 0.07))
 
+	# golden tiles: a soft pulsing ring so they stand out on a busy board
+	var pulse := 0.5 + 0.5 * sin(now / 420.0)
+	for gk in nodes:
+		var gn: TileNode = nodes[gk]
+		if gn.tile != null and gn.tile.gold:
+			var gp := _screen_of(gk)
+			TileArt.stroke_hex(ci, gp, s * (1.0 + 0.04 * pulse), Color(1, 0.82, 0.25, 0.25 + 0.35 * pulse), maxf(2, s * 0.06))
+	if ghost.visible and S.cur != null and S.cur.gold:
+		var gg := to_s(game.sel.q, game.sel.r) + Vector2(0, ghost.yo_px)
+		TileArt.stroke_hex(ci, gg, s * (1.0 + 0.04 * pulse), Color(1, 0.82, 0.25, 0.25 + 0.35 * pulse), maxf(2, s * 0.06))
+
 	# quest pennants
 	for k in nodes:
 		var e = S.board.get(k)

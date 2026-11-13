@@ -349,6 +349,33 @@ static func station(ci: CanvasItem, x: float, y: float, s: float) -> void:
 	ci.draw_arc(Vector2(x, T - s * 0.05), s * 0.035, 0, TAU, 12, roof, 0.8, true)
 
 
+## Solid arrows showing where a windmill or lighthouse fires: a short shaft and a
+## filled arrowhead near each firing edge, yellow with a dark outline so they
+## read on any land. Drawn on top of trees and houses.
+static func ray_arrows(ci: CanvasItem, tile: Tile, s: float) -> void:
+	var fill := Color("#ffd23a")
+	var edge := Color("#3a2606")
+	for dd in tile.special_dirs():
+		var a := -dd * PI / 3
+		var u := Vector2(cos(a), sin(a))
+		var n := Vector2(-u.y, u.x)
+		var tip := u * s * 0.84
+		var back := u * s * 0.6
+		var half := s * 0.15
+		var head := PackedVector2Array([tip, back + n * half, back + u * s * 0.05, back - n * half])
+		var shaft_a := u * s * 0.4
+		# outline: draw the shapes a bit wider in the dark colour first
+		ci.draw_line(shaft_a, back + u * s * 0.05, edge, s * 0.11 + 3.0, true)
+		var outline := head.duplicate()
+		outline.append(head[0])
+		ci.draw_colored_polygon(head, edge)
+		ci.draw_polyline(outline, edge, 3.4, true)
+		ci.draw_line(shaft_a, back + u * s * 0.05, fill, s * 0.11, true)
+		ci.draw_colored_polygon(head, fill)
+		# small highlight along one side of the head
+		ci.draw_line(tip - u * 1.5, back + n * half * 0.8, Color(1, 1, 0.85, 0.85), 1.2, true)
+
+
 ## Draws a whole tile centred on (0, 0).
 static func draw_tile(ci: CanvasItem, tile: Tile) -> void:
 	var s := S0
@@ -472,21 +499,12 @@ static func draw_tile(ci: CanvasItem, tile: Tile) -> void:
 		var pp: Array = wc.call(i)
 		ci.draw_line(pp[0], pp[1], Color(1, 1, 1, 0.4), 1.6, true)
 	if tile.gold:
-		stroke_hex(ci, C, s - 1.4, Color("#f5c542"), 2.8)
-		stroke_hex(ci, C, s - 3.8, Color(1, 0.94, 0.706, 0.6), 1.0)
-	if tile.special != "" and tile.special != "belltower":
-		for dd in tile.special_dirs():
-			var a := -dd * PI / 3
-			var u := Vector2(cos(a), sin(a))
-			var n := Vector2(-u.y, u.x)
-			var m := s * 0.72
-			var w := s * 0.1
-			var arrow := PackedVector2Array([u * (m - w) + n * w, u * m, u * (m - w) - n * w])
-			var shadow_arrow := PackedVector2Array()
-			for p in arrow:
-				shadow_arrow.append(p + Vector2(0, 0.8))
-			ci.draw_polyline(shadow_arrow, Color(0, 0, 0, 0.3), 2.6, true)
-			ci.draw_polyline(arrow, Color(1, 0.973, 0.839, 0.95), 2.0, true)
+		# a warm gold glow over the whole top, then a thick rim with a dark edge
+		ci.draw_colored_polygon(hex_pts(C, s), Color(1, 0.8, 0.2, 0.2))
+		stroke_hex(ci, C, s - 2.2, Color("#5a3d00"), 6.4)
+		stroke_hex(ci, C, s - 2.2, Color("#ffc928"), 4.4)
+		stroke_hex(ci, C, s - 1.6, Color("#fff1a8"), 1.2)
+		stroke_hex(ci, C, s - 5.4, Color(1, 0.95, 0.7, 0.75), 1.2)
 	if tile.special != "":
 		deco.append({"y": s * 0.12, "k": "structure"})
 	if tile.is_station():
@@ -506,9 +524,14 @@ static func draw_tile(ci: CanvasItem, tile: Tile) -> void:
 				structure(ci, tile.special, 0, 0, s)
 			"station":
 				station(ci, 0, 0, s)
+	if tile.special != "" and tile.special != "belltower":
+		ray_arrows(ci, tile, s)
 	if tile.gold:
-		star(ci, Vector2(s * 0.46, -s * 0.52), s * 0.15, Color("#fff3b0"))
-		star(ci, Vector2(-s * 0.5, s * 0.18), s * 0.09, Color("#fff3b0"))
+		# outlined stars so they read on any land
+		for st in [[Vector2(s * 0.46, -s * 0.5), s * 0.2], [Vector2(-s * 0.52, s * 0.16), s * 0.13]]:
+			star(ci, st[0], st[1] + 2.0, Color("#5a3d00"))
+			star(ci, st[0], st[1], Color("#ffe066"))
+			star(ci, st[0] + Vector2(-st[1] * 0.12, -st[1] * 0.12), st[1] * 0.45, Color("#fffbe0"))
 
 
 ## Quest pennant. `size` is the on-screen tile radius; drawn around `pos`.
