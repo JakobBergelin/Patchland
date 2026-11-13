@@ -144,7 +144,29 @@ func _run() -> void:
 	# --- test run: everything unlocked, nothing recorded ---
 	var scores_before := Scores.load_list(CFG).size()
 	var unlocks_before := Unlocks.load_ids(CFG).size()
+	var count_locked := func() -> int:
+		var n := 0
+		for tab in 3:
+			game.screen.tab = tab
+			game.screen._render()
+			await process_frame
+			for card in game.screen.get_node("%Grid").get_children():
+				if not card.is_queued_for_deletion() and card.theme_type_variation == &"CardLocked":
+					n += 1
+		return n
+	game.show_collection("menu")
+	await _wait(3)
+	var locked_normal: int = await count_locked.call()
 	game.test_run = true
+	game.show_collection("menu")
+	await _wait(3)
+	var locked_test: int = await count_locked.call()
+	check(locked_normal > 0 and locked_test == 0, "with Test run on, the Collection shows everything unlocked (%d locked normally, %d in test)" % [locked_normal, locked_test])
+	game.screen.tab = 1
+	game.screen._render()
+	await _shot("m12_collection_test_run")
+	check(Unlocks.load_ids(CFG).size() == unlocks_before, "and the saved unlocks are unchanged")
+	game.show_main_menu()
 	game.start_play()
 	await _wait(5)
 	check(game.run_is_test and game.S.allowed_specials.size() == Defs.SKEYS.size() and game.S.allowed_relics.size() == Defs.RELICS.size(), "a test run has every special and relic")

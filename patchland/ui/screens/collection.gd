@@ -10,18 +10,28 @@ const FILTERS := ["All", "Common", "Fine", "Heirloom", "Locked"]
 var settings_path := ""
 var tab := 0
 var filter := 0
+var show_all := false
 var _tab_group := ButtonGroup.new()
 var _filter_group := ButtonGroup.new()
 
 
-func setup(path: String) -> void:
+## show_all: the menu's Test run switch is on, so show everything as unlocked
+## (your saved progress isn't changed).
+func setup(path: String, all := false) -> void:
 	settings_path = path
+	show_all = all
 	var pr := Unlocks.progress(path)
-	%Count.text = "%d / %d" % [pr.x, pr.y]
+	if show_all:
+		pr.x = pr.y
+	%Count.text = ("%d / %d" % [pr.x, pr.y]) + ("  ·  test run: everything unlocked" if show_all else "")
 	%Bar.max_value = pr.y
 	%Bar.value = pr.x
 	_render()
 	%Back.grab_focus.call_deferred()
+
+
+func _unlocked(id: String) -> bool:
+	return show_all or Unlocks.is_unlocked(settings_path, id)
 
 
 func _ready() -> void:
@@ -67,10 +77,10 @@ func _render() -> void:
 				if sp.kind == "landmark":
 					t.base = [sp.terrain, sp.terrain, "meadow", sp.terrain, sp.terrain, "field"] as Array[String]
 				var kind_tag: String = {"ray": "Fires rays", "landmark": "Landmark", "wild": "Wild", "stones": "Harvest"}.get(sp.kind, "")
-				%Grid.add_child(_card(t, sp.name, kind_tag, sp.desc, sp.unlock_text, Unlocks.is_unlocked(settings_path, k)))
+				%Grid.add_child(_card(t, sp.name, kind_tag, sp.desc, sp.unlock_text, _unlocked(k)))
 		1:
 			for r in Defs.RELICS:
-				var unlocked := Unlocks.is_unlocked(settings_path, r.id)
+				var unlocked := _unlocked(r.id)
 				if filter == 4 and unlocked:
 					continue
 				if filter in [1, 2, 3] and r.rarity != filter - 1:
@@ -78,7 +88,7 @@ func _render() -> void:
 				var desc: String = r.desc + ("  Available from the start." if r.starter else "")
 				%Grid.add_child(_card(Tile.mono(r.t, hash(r.id) & 0x7fffffff), r.name, Defs.RARITY_NAMES[r.rarity], desc, r.unlock_text, unlocked, r.rarity))
 		2:
-			var open := Unlocks.seasons_open(settings_path)
+			var open := Defs.SEASON_SCALE.size() if show_all else Unlocks.seasons_open(settings_path)
 			for i in Defs.SEASON_SCALE.size():
 				var scale: float = Defs.SEASON_SCALE[i]
 				var t := Tile.mono(["meadow", "field", "forest", "water", "village"][i % 5], 100 + i)

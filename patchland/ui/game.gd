@@ -1967,5 +1967,5 @@ func show_scoreboard(back := "menu") -> void:
 func show_collection(back := "menu") -> void:
 	overlay_back = back
 	var c = open_screen(COLLECTION_SCENE, "collection")
-	c.setup(settings_path)
+	c.setup(settings_path, test_run)
 	c.back_pressed.connect(_overlay_back)
