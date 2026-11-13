@@ -9,11 +9,11 @@ RUNS="${2:-3}"
 OUT="$(mktemp -d)"
 for bot in ${BOTS:-greedy casual}; do
   for p in $(seq 1 "$PROCS"); do
-    "$GODOT" --headless --path . -s res://tests/run_sim.gd -- --bot "$bot" --nofail --runs "$RUNS" --seed $((p * 100)) > "$OUT/$bot-$p.txt" 2>&1 &
+    "$GODOT" --headless --path . -s res://tests/run_sim.gd -- --bot "$bot" --nofail --profile "${PROFILE:-all}" --runs "$RUNS" --seed $((p * 100)) > "$OUT/$bot-$p.txt" 2>&1 &
   done
 done
 wait
-GOALS=$(grep -o 'const GOALS := \[.*\]' core/defs.gd | sed 's/.*\[//; s/\]//; s/ //g')
+GOALS=$(grep -o '^goals = PackedInt32Array(.*)' data/content.tres | sed 's/.*(//; s/)//; s/ //g')
 for bot in ${BOTS:-greedy casual}; do
   echo "== $bot bot ($((PROCS * RUNS)) runs, playing on after misses)"
   grep -h "^SCORES $bot " "$OUT"/$bot-*.txt | awk -v goals="$GOALS" '

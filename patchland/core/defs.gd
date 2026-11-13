@@ -31,35 +31,14 @@ const FEATURE_CHANCE := 0.3  # of non-special tiles
 const RIVER_SHARE := 0.55
 const TWEIGHT := [["forest", 28], ["field", 24], ["meadow", 20], ["water", 14], ["village", 14]]
 
-const SPECIALS := {
-	"windmill": {"name": "Windmill", "dirs": [0, 2, 4], "len": 3, "desc": "Fires 3 rays, each 3 tiles long."},
-	"lighthouse": {"name": "Lighthouse", "dirs": [0], "len": 99, "desc": "Fires 1 ray the way it faces, all the way to the edge of your land."},
-	"belltower": {"name": "Bell tower", "dirs": [0, 1, 2, 3, 4, 5], "len": 1, "desc": "Rings all 6 neighbors."},
-}
-const SKEYS := ["windmill", "lighthouse", "belltower"]
-
-const RELICS := [
-	{"id": "saw", "name": "Sawmill", "t": "forest", "desc": "Forest edges give +4 yield."},
-	{"id": "falu", "name": "Falu paint", "t": "village", "desc": "Village edges give +8 yield."},
-	{"id": "mill", "name": "Watermill", "t": "water", "desc": "Each matched water edge adds +1 multiplier."},
-	{"id": "harvest", "name": "Harvest fair", "t": "field", "desc": "+3 multiplier when a field edge matches."},
-	{"id": "wild", "name": "Open meadow", "t": "meadow", "desc": "Meadow edges match any land."},
-	{"id": "ferry", "name": "Ferryman", "t": "water", "desc": "Water and village edges match each other."},
-	{"id": "plumb", "name": "Plumb line", "t": "village", "desc": "Perfect placements give ×3 multiplier instead of ×2."},
-	{"id": "patch", "name": "Patchwork", "t": "meadow", "desc": "+4 multiplier when you match 3 or more kinds of land at once."},
-	{"id": "almanac", "name": "Almanac", "t": "field", "desc": "Gains +1 multiplier for every perfect placement. Also counts in the harvest."},
-	{"id": "mono", "name": "Monoculture", "t": "forest", "desc": "+40 yield for tiles with only one kind of land."},
-	{"id": "carto", "name": "Cartographer", "t": "meadow", "desc": "+2 tiles every round."},
-	{"id": "second", "name": "Second thoughts", "t": "water", "desc": "+2 redraws every round."},
-	{"id": "goldsmith", "name": "Goldsmith", "t": "village", "desc": "Golden tiles show up three times as often."},
-	{"id": "surveyor", "name": "Surveyor", "t": "field", "desc": "Quests also give +3 multiplier to your next placement."},
-	{"id": "granary", "name": "Granary", "t": "field", "desc": "Field regions give double yield in the harvest."},
-	{"id": "oak", "name": "Old oak", "t": "forest", "desc": "Forest regions of 6+ tiles give +3 multiplier in the harvest."},
-	{"id": "miller", "name": "Miller", "t": "field", "desc": "Windmills fire twice."},
-	{"id": "keeper", "name": "Lamplighter", "t": "water", "desc": "Each special tile that fires adds +2 multiplier instead of +1."},
-	{"id": "rope", "name": "Bell rope", "t": "village", "desc": "Bell towers also ring tiles 2 steps away."},
-	{"id": "architect", "name": "Architect", "t": "meadow", "desc": "Special tiles show up twice as often."},
-]
+## Special tiles and relics come from data/content.tres (edit them in the Inspector).
+## SPECIALS: id -> {id, name, desc, kind, dirs, len, terrain, unlock_*}; SKEYS: ids in order.
+## RELICS: [{id, name, t, desc, rarity, starter, unlock_*}].
+static var SPECIALS := {}
+static var SKEYS: Array = []
+static var RELICS: Array = []
+static var RARITY_WEIGHTS: Array = [6.0, 3.0, 1.0]
+const RARITY_NAMES := ["Common", "Fine", "Heirloom"]
 
 const BOSSES := [
 	{"id": "drought", "name": "Drought", "desc": "Water gives no yield this round, harvest included."},
@@ -71,9 +50,40 @@ const BOSSES := [
 
 const BOSS_ROUNDS := [2, 5, 7]
 const ROUNDS := 8
-## Tiles dealt each round (before Cartographer +2 and Short season -3).
-const TILES_PER_ROUND := 10
-const GOALS := [500, 3200, 9500, 30000, 66000, 120000, 240000, 340000]
+## Tiles dealt each round and Season 1 goals, from content.tres.
+static var TILES_PER_ROUND := 10
+static var GOALS: Array = []
+## Goal multiplier per Season; winning a Season unlocks the next.
+static var SEASON_SCALE: Array = [1.0]
+
+
+const CONTENT_PATH := "res://data/content.tres"
+
+
+static func _static_init() -> void:
+	load_content(load(CONTENT_PATH))
+
+
+## Fills SPECIALS, RELICS, GOALS etc. from a ContentDB resource.
+static func load_content(db: ContentDB) -> void:
+	SPECIALS.clear()
+	SKEYS.clear()
+	RELICS.clear()
+	for s in db.specials:
+		SKEYS.append(s.id)
+		SPECIALS[s.id] = {"id": s.id, "name": s.name, "desc": s.desc, "kind": s.kind, "dirs": Array(s.dirs), "len": s.length,
+			"terrain": s.terrain, "unlock_stat": s.unlock_stat, "unlock_need": s.unlock_need, "unlock_text": s.unlock_text}
+	for r in db.relics:
+		RELICS.append({"id": r.id, "name": r.name, "t": r.terrain, "desc": r.desc, "rarity": r.rarity, "starter": r.starter,
+			"unlock_stat": r.unlock_stat, "unlock_need": r.unlock_need, "unlock_text": r.unlock_text})
+	GOALS = Array(db.goals)
+	TILES_PER_ROUND = db.tiles_per_round
+	SEASON_SCALE = Array(db.season_goal_scale) if not db.season_goal_scale.is_empty() else [1.0]
+	RARITY_WEIGHTS = Array(db.rarity_weights)
+
+
+static func special_kind(id: String) -> String:
+	return SPECIALS[id].kind if SPECIALS.has(id) else ""
 
 
 static func relic(id: String) -> Dictionary:

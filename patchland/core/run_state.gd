@@ -29,6 +29,17 @@ var closed_forest_max := 0
 var closed_meadow_max := 0
 var gold_perfects := 0
 var chains := 0
+var big_perfects := 0  # Perfects with 5+ neighbors
+var closed_field_max := 0
+var closed_village_max := 0
+var big_closes := 0  # areas of 6+ tiles closed
+var placed := 0
+var specials_placed := 0
+var golds_placed := 0
+var landmark_harvests := 0  # harvest regions boosted by a landmark
+var biggest_region := 0  # largest region scored in a harvest
+## Difficulty level (1-based); scales the goals (Defs.SEASON_SCALE).
+var season := 1
 ## Special tiles and relics this run may deal / offer. Default: everything (sims,
 ## tests, test runs); Game narrows them to the player's unlocks before new_run().
 var allowed_specials: Array = Defs.SKEYS.duplicate()
@@ -59,7 +70,11 @@ var goal_override := 0  # the tutorial uses a fixed, easy goal
 func goal() -> int:
 	if goal_override > 0:
 		return goal_override
-	return Defs.GOALS[round_idx]
+	var scale: float = Defs.SEASON_SCALE[clampi(season - 1, 0, Defs.SEASON_SCALE.size() - 1)]
+	# the Season's extra difficulty ramps in over the first 4 rounds: round 1 (few
+	# tiles, no relics yet) is mostly luck, so a full-strength goal there is unfair
+	scale = 1.0 + (scale - 1.0) * minf(1.0, (round_idx + 1) / 4.0)
+	return int(round(Defs.GOALS[round_idx] * scale / 100.0)) * 100 if scale != 1.0 else Defs.GOALS[round_idx]
 
 
 func make_tile(min_kinds := 0, plain := false) -> Tile:
@@ -114,6 +129,15 @@ func new_run(seed_val := -1) -> void:
 	closed_meadow_max = 0
 	gold_perfects = 0
 	chains = 0
+	big_perfects = 0
+	closed_field_max = 0
+	closed_village_max = 0
+	big_closes = 0
+	placed = 0
+	specials_placed = 0
+	golds_placed = 0
+	landmark_harvests = 0
+	biggest_region = 0
 	biggest_closed = 0
 	perfects = 0
 	best_harvest = 0
@@ -145,8 +169,18 @@ func start_round() -> void:
 	var bi := Defs.BOSS_ROUNDS.find(round_idx)
 	boss = boss_order[bi] if bi >= 0 else ""
 	tiles_left = Defs.TILES_PER_ROUND + (2 if has_relic("carto") else 0) - (3 if boss == "short" else 0)
+	if boss != "" and has_relic("herald"):
+		tiles_left += 3
+	if has_relic("pathfinder"):
+		tiles_left += mini(3, big_closes)
 	redraws = 0 if boss == "fog" else 2 + (2 if has_relic("second") else 0)
 	cur = make_tile()
+	if has_relic("oldmaps") and not allowed_specials.is_empty():
+		cur.special = allowed_specials[rng.randi_range(0, allowed_specials.size() - 1)]
+		cur.feat = ["", "", "", "", "", ""] as Array[String]
+		cur.gold = false
+		cur.quest = {}
+		cur.fit_special(rng)
 	nxt = make_tile()
 	nxt2 = make_tile()
 	busy = false
@@ -223,11 +257,28 @@ func finish_placement(entry: Dictionary, ev: Dictionary) -> Dictionary:
 			closed_forest_max = maxi(closed_forest_max, reg.tiles.size())
 		elif reg.t == "meadow":
 			closed_meadow_max = maxi(closed_meadow_max, reg.tiles.size())
+		elif reg.t == "field":
+			closed_field_max = maxi(closed_field_max, reg.tiles.size())
+		elif reg.t == "village":
+			closed_village_max = maxi(closed_village_max, reg.tiles.size())
+		if reg.tiles.size() >= 6:
+			big_closes += 1
 		res.regions.append({"reg": reg, "bonus": rbonus})
-	if ev.events.size() > 1:
+	var fired := 0
+	for e in ev.events:
+		if not e.rays.is_empty():
+			fired += 1
+	if fired > 1:
 		chains += 1  # one special set off another
 	if ev.perfect and entry.tile.gold:
 		gold_perfects += 1
+	if ev.perfect and ev.nb >= 5:
+		big_perfects += 1
+	placed += 1
+	if entry.tile.special != "":
+		specials_placed += 1
+	if entry.tile.gold:
+		golds_placed += 1
 	if ev.perfect:
 		streak += 1
 		perfects += 1
@@ -324,6 +375,14 @@ func apply_harvest(points: int) -> void:
 	best_harvest = maxi(best_harvest, points)
 
 
+## Records achievement stats from a harvest result (Rules.harvest_calc).
+func record_harvest(h: Dictionary) -> void:
+	for r in h.regions:
+		biggest_region = maxi(biggest_region, r.n)
+		if r.get("landmarks", 0) > 0:
+			landmark_harvests += 1
+
+
 func cleared() -> bool:
 	return round_score >= goal()
 
@@ -339,12 +398,28 @@ func is_last_round() -> bool:
 	return round_idx == Defs.ROUNDS - 1
 
 
+## Up to 3 relics to choose from: unlocked, not owned, drawn by rarity weight
+## (Common most often, Heirloom least).
 func draft_pool() -> Array:
 	var pool: Array = []
 	for r in Defs.RELICS:
 		if not has_relic(r.id) and allowed_relics.has(r.id):
 			pool.append(r)
-	return Defs.shuffle(pool, rng).slice(0, 3)
+	var out: Array = []
+	while out.size() < 3 and not pool.is_empty():
+		var total := 0.0
+		for r in pool:
+			total += Defs.RARITY_WEIGHTS[r.rarity]
+		var x := rng.randf() * total
+		var pick: Dictionary = pool[pool.size() - 1]
+		for r in pool:
+			x -= Defs.RARITY_WEIGHTS[r.rarity]
+			if x < 0:
+				pick = r
+				break
+		out.append(pick)
+		pool.erase(pick)
+	return out
 
 
 func next_round() -> void:

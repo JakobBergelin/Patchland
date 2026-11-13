@@ -77,6 +77,27 @@ func add_feature(rng: RandomNumberGenerator, f: String, open_lines := {}) -> voi
 		feat[allowed[k]] = f
 
 
+## Makes the land suit the special: a landmark gets at least 3 edges of the land
+## type whose area it boosts (so it can sit inside that area).
+func fit_special(rng: RandomNumberGenerator) -> void:
+	if Defs.special_kind(special) != "landmark":
+		return
+	var t: String = Defs.SPECIALS[special].terrain
+	var have := base.count(t)
+	var others: Array[int] = []
+	for i in 6:
+		if base[i] != t:
+			others.append(i)
+	Defs.shuffle(others, rng)
+	while have < 3 and not others.is_empty():
+		base[others.pop_back()] = t
+		have += 1
+
+
+func is_wild() -> bool:
+	return special == "crossroads"
+
+
 func has_quest() -> bool:
 	return not quest.is_empty()
 
@@ -134,11 +155,13 @@ static func make(rng: RandomNumberGenerator, min_kinds := 0, plain := false, rel
 		tile.base.append(run[(i + off) % 6])
 	tile.art_seed = rng.randi_range(0, 999999999)
 	if not plain:
-		var special_chance := 0.2 if relics.has("architect") else 0.1
+		# more unlocked special kinds = more special tiles (unlocks never dilute them)
+		var special_chance := (0.06 + 0.014 * specials.size()) * (2.0 if relics.has("architect") else 1.0)
 		var gold_chance := 0.18 if relics.has("goldsmith") else 0.06
 		# only unlocked special tiles can be dealt; with none unlocked, no specials at all
 		if not specials.is_empty() and rng.randf() < special_chance:
 			tile.special = specials[rng.randi_range(0, specials.size() - 1)]
+			tile.fit_special(rng)
 		else:
 			# rivers/railroads are independent of the gold/quest roll; specials never get one
 			if rng.randf() < Defs.FEATURE_CHANCE:

@@ -1,0 +1,63 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/screens/scoreboard.gd" id="1_sb"]
+
+[node name="Scoreboard" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_sb")
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Sheet" type="PanelContainer" parent="Center"]
+custom_minimum_size = Vector2(640, 0)
+layout_mode = 2
+theme_type_variation = &"Sheet"
+
+[node name="Box" type="VBoxContainer" parent="Center/Sheet"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Center/Sheet/Box"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "Scoreboard"
+
+[node name="Table" type="PanelContainer" parent="Center/Sheet/Box"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="Grid" type="GridContainer" parent="Center/Sheet/Box/Table"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 22
+theme_override_constants/v_separation = 8
+columns = 5
+
+[node name="Empty" type="Label" parent="Center/Sheet/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "No runs yet. Finish a run and it shows up here."
+
+[node name="Note" type="Label" parent="Center/Sheet/Box"]
+layout_mode = 2
+theme_type_variation = &"SmallLabel"
+text = "Your best 10 runs on this computer."
+
+[node name="Back" type="Button" parent="Center/Sheet/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Back"
